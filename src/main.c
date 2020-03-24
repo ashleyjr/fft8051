@@ -9,7 +9,9 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define CORDIC_TEST
+//#define CORDIC_TEST
+#define CLOG2_TEST
+
 
 #define UART_SIZE_OUT   65
 #define UART_SIZE_IN    8
@@ -38,6 +40,8 @@ void setup(void);
 void uartTx(U8 tx);
 U8   uartRx(void);
 U8   uartEmpty(void);
+
+float clog2(float n);
 
 float cordic(U8 cos_n_sin, float theta);
 float sin(float theta);
@@ -110,7 +114,11 @@ void main (void){
          uartTxFloat(sin(uartRxFloat()));
       }
       #endif
-
+      #ifdef CLOG2_TEST
+      if(!uartEmpty()){        
+         uartTxFloat(clog2(uartRxFloat()));
+      }
+      #endif
    }
 } 
 
@@ -138,6 +146,22 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
    TMR2H = 253;     // Reset timer
    TMR2L = 240;     // Tuned for baud rate
    TMR2CN_TF2H = 0;  
+}
+
+//-----------------------------------------------------------------------------
+// Logs
+//-----------------------------------------------------------------------------
+
+float clog2(float n){
+   U32 i;
+   U8 j;
+   i = (U32)n;
+   j = 0;
+   while(i){
+      i >>= 1;
+      j++;
+   }
+   return (float)j;
 }
 
 //-----------------------------------------------------------------------------
@@ -283,11 +307,9 @@ void setup(void){
 			     CLKSEL_CLKDIV__SYSCLK_DIV_1;      // Do not divide     
    // Setup XBAR     
    P0MDOUT  = P0MDOUT_B4__PUSH_PULL|            // PWM
-              P0MDOUT_B5__OPEN_DRAIN;
-   //P0SKIP   = 0xCF;                             // Do not skip P0.4  
+              P0MDOUT_B5__OPEN_DRAIN; 
    P1MDOUT  = P1MDOUT_B0__PUSH_PULL|            // LED            
-              P1MDOUT_B1__PUSH_PULL;            // LED
-  // P1SKIP   = 0xFC;                             // Do not skip P1.0
+              P1MDOUT_B1__PUSH_PULL;            // LED 
                                                 // Do not skip P1.1 
    XBR1     = XBR1_PCA0ME__CEX0;                // Route out PCA0.CEX0 on P0.2
    XBR0     = XBR0_URT0E__ENABLED;              // Route out UART P0.4 
