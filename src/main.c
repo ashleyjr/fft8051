@@ -9,6 +9,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
+#define CORDIC_TEST
+
 #define UART_SIZE_OUT   65
 #define UART_SIZE_IN    8
 
@@ -103,11 +105,11 @@ void main (void){
    i = 0;
    while(1){   
       
-      if(!uartEmpty()){
-        
+      #ifdef CORDIC_TEST
+      if(!uartEmpty()){        
          uartTxFloat(sin(uartRxFloat()));
-         
       }
+      #endif
 
    }
 } 
@@ -143,7 +145,7 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 //-----------------------------------------------------------------------------
 
 float cordic(U8 cos_n_sin, float theta){
-   float d,x,x_next,y,z,s,q; 
+   float d,x,x_next,y,z; 
    U8 i;
    U8 is_neg;
    x = 1;
