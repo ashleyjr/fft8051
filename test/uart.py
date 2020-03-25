@@ -4,7 +4,6 @@ import time
 import sys
 import random
 import threading
-import time
 from optparse import OptionParser
 import math
 

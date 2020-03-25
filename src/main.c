@@ -9,12 +9,12 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-//#define CORDIC_TEST
-#define CLOG2_TEST
+#define CORDIC_TEST
+//#define CLOG2_TEST
 
 
-#define UART_SIZE_OUT   65
-#define UART_SIZE_IN    8
+#define UART_SIZE_OUT   128
+#define UART_SIZE_IN    128
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -79,11 +79,12 @@ static const float cordic_lut[CORDIC_LUT_SIZE] ={
 //-----------------------------------------------------------------------------
 // Global Variables
 //-----------------------------------------------------------------------------
-volatile U8 uart_out[UART_SIZE_OUT];
+
+__xdata volatile U8 uart_out[UART_SIZE_OUT];
 volatile U8 out_head;
 volatile U8 out_tail;
 
-volatile U8 uart_in[UART_SIZE_IN];
+__xdata volatile U8 uart_in[UART_SIZE_IN];
 volatile U8 in_head;
 volatile U8 in_tail;
 
