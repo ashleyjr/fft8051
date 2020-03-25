@@ -4,17 +4,16 @@ import math
 import random
 
 print "Test begins"
-LEN = 32
+LEN = 200
 u = uart()
 p = printer()
 p.loopStart()
 max_error = -1
 for i in range(LEN):
-    ii = random.uniform(1,(2 ** 32))
-    z = math.ceil(math.log(ii, 2))
-    u.floatTx(ii)
-    m = u.floatRx()
-    e = abs(z - m)
+    ii = random.randrange(0,255)
+    u.tx(ii)
+    m = u.rx()
+    e = abs(ii - m)
     p.setMessage(str(i)+"/"+str(LEN))
     if e > max_error:
         max_error = e

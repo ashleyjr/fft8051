@@ -9,12 +9,12 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define CORDIC_TEST
-//#define CLOG2_TEST
+//#define BANDWIDTH
+//#define CORDIC_TEST
+#define CLOG2_TEST
 
-
-#define UART_SIZE_OUT   128
-#define UART_SIZE_IN    128
+#define UART_SIZE_OUT 4 
+#define UART_SIZE_IN  12 
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -37,18 +37,21 @@ SBIT(BUT1, SFR_P2, 1);
 
 void setup(void);
 
-void uartTx(U8 tx);
-U8   uartRx(void);
-U8   uartEmpty(void);
-
 float clog2(float n);
 
 float cordic(U8 cos_n_sin, float theta);
 float sin(float theta);
 float cos(float theta);
 
-void uartTxFloat(float tx);
+void  uartInit(void);
+void  uartTx(U8 tx);
+U8    uartRx(void);
+U8    uartRxEmpty(void);
+U8    uartTxEmpty(void);
+U8    uartTxFull(void);
+void  uartTxFloat(float tx);
 float uartRxFloat(void);
+
 //-----------------------------------------------------------------------------
 // Look Up Tables
 //-----------------------------------------------------------------------------
@@ -83,42 +86,37 @@ static const float cordic_lut[CORDIC_LUT_SIZE] ={
 __xdata volatile U8 uart_out[UART_SIZE_OUT];
 volatile U8 out_head;
 volatile U8 out_tail;
+volatile U8 out_head_wrap;
+volatile U8 out_tail_wrap;
 
 __xdata volatile U8 uart_in[UART_SIZE_IN];
 volatile U8 in_head;
 volatile U8 in_tail;
+volatile U8 in_head_wrap;
+volatile U8 in_tail_wrap;
 
 //-----------------------------------------------------------------------------
 // Main Routine
 //-----------------------------------------------------------------------------
 
 void main (void){    
-   
-   float i;
+   uartInit();     
    setup();
-
-   // Init UART
-   out_head = 0;
-   out_tail = 0;
-   in_head = 0;
-   in_tail = 0;
-   
+  
    // LEDs off
    LED0 = 1;  
    LED1 = 1;
 
-   i = 0;
    while(1){   
-      
+     
+      #ifdef BANDWIDTH 
+      uartTx(uartRx());
+      #endif
       #ifdef CORDIC_TEST
-      if(!uartEmpty()){        
-         uartTxFloat(sin(uartRxFloat()));
-      }
+      uartTxFloat(sin(uartRxFloat()));
       #endif
       #ifdef CLOG2_TEST
-      if(!uartEmpty()){        
-         uartTxFloat(clog2(uartRxFloat()));
-      }
+      uartTxFloat(clog2(uartRxFloat()));
       #endif
    }
 } 
@@ -133,14 +131,22 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
       SCON0_RI = 0;;
       uart_in[in_head] = SBUF0;
       in_head++;
-      in_head %= UART_SIZE_IN;
+      if(in_head == UART_SIZE_IN){
+         in_head = 0;
+         in_head_wrap++;
+         in_head_wrap %= 2;
+      } 
    }
    
    // UART TX
-   if(out_head != out_tail){
+   if(!uartTxEmpty()){
       SBUF0 = uart_out[out_tail]; 
       out_tail++;                 
-      out_tail %= UART_SIZE_OUT;  
+      if(out_tail == UART_SIZE_OUT){
+         out_tail = 0; 
+         out_tail_wrap++;
+         out_tail_wrap %= 2;
+      } 
    }
    
    // Timer
@@ -170,7 +176,7 @@ float clog2(float n){
 //-----------------------------------------------------------------------------
 
 float cordic(U8 cos_n_sin, float theta){
-   float d,x,x_next,y,z; 
+   __xdata float d,x,x_next,y,z; 
    U8 i;
    U8 is_neg;
    x = 1;
@@ -225,7 +231,7 @@ float cordic(U8 cos_n_sin, float theta){
    }
 }
 
-float sin(float theta){
+float sin(float theta){ 
    return cordic(0, theta);
 }
 
@@ -237,10 +243,25 @@ float cos(float theta){
 // UART
 //-----------------------------------------------------------------------------
 
+void uartInit(void){
+   out_head = 0;
+   out_tail = 0;
+   out_head_wrap = 0;
+   out_tail_wrap = 0;
+   in_head = 0;
+   in_tail = 0;
+   in_head_wrap = 0;
+   in_tail_wrap = 0;
+}
+
 void uartTx(U8 tx){
    uart_out[out_head] = tx;
    out_head++;
-   out_head %= UART_SIZE_OUT;
+   if(out_head == UART_SIZE_OUT){
+      out_head = 0;
+      out_head_wrap++;
+      out_head_wrap %= 2;
+   }
 }
 
 
@@ -258,12 +279,15 @@ void uartTxFloat(float tx){
 }
 
 U8 uartRx(void){
-   U8 rx = 0;
-   if(!uartEmpty()){
-      rx = uart_in[in_tail];
-      in_tail++;
-      in_tail %= UART_SIZE_IN;
-   }
+   U8 rx;
+   while(uartRxEmpty());
+   rx = uart_in[in_tail];
+   in_tail++;
+   if(in_tail == UART_SIZE_IN){
+      in_tail = 0;
+      in_tail_wrap++;
+      in_tail_wrap %= 2;
+   } 
    return rx;
 }
 
@@ -273,22 +297,37 @@ float uartRxFloat(void){
       float floating;
       U32 integer;
    } a; 
-   while(uartEmpty());
    a.integer = uartRx();
    a.integer <<= 8;
-   while(uartEmpty());
    a.integer|= uartRx();
    a.integer <<= 8;
-   while(uartEmpty());
    a.integer |= uartRx();
    a.integer <<= 8;
-   while(uartEmpty());
    a.integer |= uartRx(); 
    return a.floating;
 }
 
-U8 uartEmpty(void){
-   if(in_tail == in_head){
+U8 uartRxEmpty(void){
+   if((in_tail == in_head) &
+      (in_tail_wrap == in_head_wrap)){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartTxFull(void){
+   if((out_tail == out_head) &
+      (out_tail_wrap != out_head_wrap)){ 
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartTxEmpty(void){
+   if((out_tail == out_head) &
+      (out_tail_wrap == out_head_wrap)){
       return 1;
    }else{
       return 0;
