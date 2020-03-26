@@ -11,7 +11,7 @@
 
 //#define BANDWIDTH
 //#define CORDIC_TEST
-#define CLOG2_TEST
+//#define CLOG2_TEST
 
 #define UART_SIZE_OUT 4 
 #define UART_SIZE_IN  12 
