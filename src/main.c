@@ -9,12 +9,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-//#define BANDWIDTH
-//#define CORDIC_TEST
-//#define CLOG2_TEST
-
-#define UART_SIZE_OUT 4 
-#define UART_SIZE_IN  12 
+#define UART_SIZE_RX 8 
+#define UART_SIZE_TX 8
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -46,7 +42,14 @@ float cos(float theta);
 void  uartInit(void);
 void  uartTx(U8 tx);
 U8    uartRx(void);
+U8    uartRxPtr(void);
+U8    uartRxWrap(void);
+U8    uartRxWrapN(void);
 U8    uartRxEmpty(void);
+U8    uartRxFull(void);
+U8    uartTxPtr(void);
+U8    uartTxWrap(void);
+U8    uartTxWrapN(void);
 U8    uartTxEmpty(void);
 U8    uartTxFull(void);
 void  uartTxFloat(float tx);
@@ -83,23 +86,24 @@ static const float cordic_lut[CORDIC_LUT_SIZE] ={
 // Global Variables
 //-----------------------------------------------------------------------------
 
-__xdata volatile U8 uart_out[UART_SIZE_OUT];
-volatile U8 out_head;
-volatile U8 out_tail;
-volatile U8 out_head_wrap;
-volatile U8 out_tail_wrap;
+__xdata volatile U8 uart_tx[UART_SIZE_TX];
+volatile U8 tx_head;
+volatile U8 tx_tail;
+volatile U8 tx_head_wrap;
+volatile U8 tx_tail_wrap;
 
-__xdata volatile U8 uart_in[UART_SIZE_IN];
-volatile U8 in_head;
-volatile U8 in_tail;
-volatile U8 in_head_wrap;
-volatile U8 in_tail_wrap;
+__xdata volatile U8 uart_rx[UART_SIZE_RX];
+volatile U8 rx_head;
+volatile U8 rx_tail;
+volatile U8 rx_head_wrap;
+volatile U8 rx_tail_wrap;
 
 //-----------------------------------------------------------------------------
 // Main Routine
 //-----------------------------------------------------------------------------
 
 void main (void){    
+    
    uartInit();     
    setup();
   
@@ -108,13 +112,23 @@ void main (void){
    LED1 = 1;
 
    while(1){   
+      #ifdef BUFFER_TEST
+      while(!uartRxFull());
+      while(!uartRxEmpty()){
+         uartTx(uartRx());  
+      }
+      while(!uartTxEmpty());
+      uartInit();
+      #endif
      
-      #ifdef BANDWIDTH 
+      #ifdef BANDWIDTH_TEST
       uartTx(uartRx());
       #endif
+      
       #ifdef CORDIC_TEST
       uartTxFloat(sin(uartRxFloat()));
       #endif
+      
       #ifdef CLOG2_TEST
       uartTxFloat(clog2(uartRxFloat()));
       #endif
@@ -128,24 +142,29 @@ void main (void){
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){        
    // UART RX
    if(SCON0_RI){ 
-      SCON0_RI = 0;;
-      uart_in[in_head] = SBUF0;
-      in_head++;
-      if(in_head == UART_SIZE_IN){
-         in_head = 0;
-         in_head_wrap++;
-         in_head_wrap %= 2;
-      } 
+      SCON0_RI = 0; 
+      if(uartRxFull()){
+         // Overflow
+         LED1 = 0;
+      }else{
+         uart_rx[rx_head] = SBUF0;
+         rx_head++;
+         if(rx_head == UART_SIZE_RX){
+            rx_head = 0;
+            rx_head_wrap++;
+            rx_head_wrap %= 2;
+         }
+      }
    }
    
    // UART TX
    if(!uartTxEmpty()){
-      SBUF0 = uart_out[out_tail]; 
-      out_tail++;                 
-      if(out_tail == UART_SIZE_OUT){
-         out_tail = 0; 
-         out_tail_wrap++;
-         out_tail_wrap %= 2;
+      SBUF0 = uart_tx[tx_tail]; 
+      tx_tail++;                 
+      if(tx_tail == UART_SIZE_TX){
+         tx_tail = 0; 
+         tx_tail_wrap++;
+         tx_tail_wrap %= 2;
       } 
    }
    
@@ -244,26 +263,39 @@ float cos(float theta){
 //-----------------------------------------------------------------------------
 
 void uartInit(void){
-   out_head = 0;
-   out_tail = 0;
-   out_head_wrap = 0;
-   out_tail_wrap = 0;
-   in_head = 0;
-   in_tail = 0;
-   in_head_wrap = 0;
-   in_tail_wrap = 0;
+   tx_head      = 0;
+   tx_tail      = 0;
+   tx_head_wrap = 0;
+   tx_tail_wrap = 0;
+   rx_head      = 0;
+   rx_tail      = 0;
+   rx_head_wrap = 0;
+   rx_tail_wrap = 0;
 }
 
 void uartTx(U8 tx){
-   uart_out[out_head] = tx;
-   out_head++;
-   if(out_head == UART_SIZE_OUT){
-      out_head = 0;
-      out_head_wrap++;
-      out_head_wrap %= 2;
+   while(uartTxFull());
+   uart_tx[tx_head] = tx;
+   tx_head++;
+   if(tx_head == UART_SIZE_TX){
+      tx_head = 0;
+      tx_head_wrap++;
+      tx_head_wrap %= 2;
    }
 }
 
+U8 uartRx(void){
+   U8 rx;
+   while(uartRxEmpty());
+   rx = uart_rx[rx_tail];
+   rx_tail++;
+   if(rx_tail == UART_SIZE_RX){
+      rx_tail = 0;
+      rx_tail_wrap++;
+      rx_tail_wrap %= 2;
+   } 
+   return rx;
+}
 
 void uartTxFloat(float tx){
    // MSB first 
@@ -276,19 +308,6 @@ void uartTxFloat(float tx){
    uartTx((a.integer >> 16)  & 0xFF);
    uartTx((a.integer >> 8)   & 0xFF);
    uartTx(a.integer          & 0xFF);  
-}
-
-U8 uartRx(void){
-   U8 rx;
-   while(uartRxEmpty());
-   rx = uart_in[in_tail];
-   in_tail++;
-   if(in_tail == UART_SIZE_IN){
-      in_tail = 0;
-      in_tail_wrap++;
-      in_tail_wrap %= 2;
-   } 
-   return rx;
 }
 
 float uartRxFloat(void){
@@ -307,31 +326,68 @@ float uartRxFloat(void){
    return a.floating;
 }
 
-U8 uartRxEmpty(void){
-   if((in_tail == in_head) &
-      (in_tail_wrap == in_head_wrap)){
+U8 uartRxPtr(void){
+   if(rx_tail == rx_head){
       return 1;
    }else{
       return 0;
    }
+}
+
+U8 uartRxWrap(void){
+   if(rx_tail_wrap == rx_head_wrap){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartRxWrapN(void){
+   if(rx_tail_wrap != rx_head_wrap){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartRxEmpty(void){   
+   return uartRxPtr() * uartRxWrap();
+}
+
+U8 uartRxFull(void){
+   return uartRxPtr() * uartRxWrapN(); 
+}
+
+U8 uartTxPtr(void){
+   if(tx_tail == tx_head){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartTxWrap(void){
+   if(tx_tail_wrap == tx_head_wrap){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartTxWrapN(void){
+   if(tx_tail_wrap != tx_head_wrap){
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+U8 uartTxEmpty(void){   
+   return uartTxPtr() * uartTxWrap();
 }
 
 U8 uartTxFull(void){
-   if((out_tail == out_head) &
-      (out_tail_wrap != out_head_wrap)){ 
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartTxEmpty(void){
-   if((out_tail == out_head) &
-      (out_tail_wrap == out_head_wrap)){
-      return 1;
-   }else{
-      return 0;
-   }
+   return uartTxPtr() * uartTxWrapN(); 
 }
 
 //-----------------------------------------------------------------------------
