@@ -9,8 +9,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 8 
-#define UART_SIZE_TX 8
+#define UART_SIZE_RX 32 
+#define UART_SIZE_TX 32
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -28,10 +28,27 @@ SBIT(BUT0, SFR_P1, 7);
 SBIT(BUT1, SFR_P2, 1);  
 
 //-----------------------------------------------------------------------------
+// Typedefs
+//-----------------------------------------------------------------------------
+
+typedef union {
+   float floating;
+   U32   integer;
+} flint_t; 
+
+typedef struct {
+   float re;
+   float im;
+} complex_t; 
+
+//-----------------------------------------------------------------------------
 // Prototypes
 //-----------------------------------------------------------------------------
 
 void setup(void);
+
+void  cadd(complex_t * a, complex_t * b, complex_t * c);
+void  cmul(complex_t * a, complex_t * b, complex_t * c);
 
 float clog2(float n);
 
@@ -104,6 +121,10 @@ volatile U8 rx_tail_wrap;
 
 void main (void){    
     
+   #ifdef COMPLEX_TEST
+   __xdata complex_t a,b,c;
+   #endif 
+
    uartInit();     
    setup();
   
@@ -132,6 +153,23 @@ void main (void){
       #ifdef CLOG2_TEST
       uartTxFloat(clog2(uartRxFloat()));
       #endif
+      
+      #ifdef COMPLEX_TEST
+      a.re = uartRxFloat();
+      a.im = uartRxFloat();
+      b.re = uartRxFloat();
+      b.im = uartRxFloat();
+      
+      cadd(&a,&b,&c);
+      cmul(&a,&c,&b);
+        
+      // b = a * (a + b)  
+      
+      uartTxFloat(b.re);
+      uartTxFloat(b.im);
+
+      #endif
+
    }
 } 
 
@@ -172,6 +210,20 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
    TMR2H = 253;     // Reset timer
    TMR2L = 240;     // Tuned for baud rate
    TMR2CN_TF2H = 0;  
+}
+
+//-----------------------------------------------------------------------------
+// Complex ops
+//-----------------------------------------------------------------------------
+
+void cadd(complex_t * a, complex_t * b, complex_t * c){
+   c->re = a->re + b->re;
+   c->im = a->im + b->im;
+}
+
+void cmul(complex_t * a, complex_t * b, complex_t * c){
+   c->re = (a->re * b->re) - (a->im * b->im);
+   c->im = (a->re * b->im) + (a->im * b->re);
 }
 
 //-----------------------------------------------------------------------------
@@ -299,10 +351,7 @@ U8 uartRx(void){
 
 void uartTxFloat(float tx){
    // MSB first 
-   union {
-      float floating;
-      U32 integer;
-   } a;
+   flint_t a;
    a.floating = tx; 
    uartTx((a.integer >> 24)  & 0xFF);
    uartTx((a.integer >> 16)  & 0xFF);
@@ -311,11 +360,8 @@ void uartTxFloat(float tx){
 }
 
 float uartRxFloat(void){
-   // MSB first 
-   union {
-      float floating;
-      U32 integer;
-   } a; 
+   // MSB first  
+   flint_t a;
    a.integer = uartRx();
    a.integer <<= 8;
    a.integer|= uartRx();
