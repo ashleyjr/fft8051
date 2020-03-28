@@ -9,8 +9,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 32 
-#define UART_SIZE_TX 32
+#define UART_SIZE_RX 64 
+#define UART_SIZE_TX 64
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -45,10 +45,12 @@ typedef struct {
 // Prototypes
 //-----------------------------------------------------------------------------
 
-void setup(void);
+void  setup(void);
 
 void  cadd(complex_t * a, complex_t * b, complex_t * c);
 void  cmul(complex_t * a, complex_t * b, complex_t * c);
+
+U32   reverse(U32 size, U32 num);
 
 float clog2(float n);
 
@@ -104,16 +106,16 @@ static const float cordic_lut[CORDIC_LUT_SIZE] ={
 //-----------------------------------------------------------------------------
 
 __xdata volatile U8 uart_tx[UART_SIZE_TX];
-volatile U8 tx_head;
-volatile U8 tx_tail;
-volatile U8 tx_head_wrap;
-volatile U8 tx_tail_wrap;
+__xdata volatile U8 tx_head;
+__xdata volatile U8 tx_tail;
+__xdata volatile U8 tx_head_wrap;
+__xdata volatile U8 tx_tail_wrap;
 
 __xdata volatile U8 uart_rx[UART_SIZE_RX];
-volatile U8 rx_head;
-volatile U8 rx_tail;
-volatile U8 rx_head_wrap;
-volatile U8 rx_tail_wrap;
+__xdata volatile U8 rx_head;
+__xdata volatile U8 rx_tail;
+__xdata volatile U8 rx_head_wrap;
+__xdata volatile U8 rx_tail_wrap;
 
 //-----------------------------------------------------------------------------
 // Main Routine
@@ -124,6 +126,10 @@ void main (void){
    #ifdef COMPLEX_TEST
    __xdata complex_t a,b,c;
    #endif 
+
+   #ifdef REV_TEST
+   __xdata U32 size, num;
+   #endif
 
    uartInit();     
    setup();
@@ -167,7 +173,13 @@ void main (void){
       
       uartTxFloat(b.re);
       uartTxFloat(b.im);
+      #endif
 
+      #ifdef REV_TEST
+      size = (U32)uartRxFloat();
+      num  = (U32)uartRxFloat();
+      num  = reverse(size,num); 
+      uartTxFloat((float)num);
       #endif
 
    }
@@ -212,6 +224,7 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
    TMR2CN_TF2H = 0;  
 }
 
+
 //-----------------------------------------------------------------------------
 // Complex ops
 //-----------------------------------------------------------------------------
@@ -224,6 +237,22 @@ void cadd(complex_t * a, complex_t * b, complex_t * c){
 void cmul(complex_t * a, complex_t * b, complex_t * c){
    c->re = (a->re * b->re) - (a->im * b->im);
    c->im = (a->re * b->im) + (a->im * b->re);
+}
+
+//-----------------------------------------------------------------------------
+// Ordering
+//-----------------------------------------------------------------------------
+
+U32 reverse(U32 size, U32 num) {
+   // Reverse the bit order
+   U32 p = 0;
+   U8 i;
+   size = (U8)clog2((float)size);
+   for(i = 1; i <= size; i++) {
+      if(num & (1 << (size - i)))
+         p |= 1 << (i - 1);
+      }
+   return p;
 }
 
 //-----------------------------------------------------------------------------
