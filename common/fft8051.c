@@ -1,8 +1,10 @@
 #include "fft8051.h"
+#include "Ws.h"
 
 void fft(complex_t * a){
-   static unsigned char i,j,k,x,y,Wi;
-   static complex_t m,W,p,q;
+   static unsigned char i,j,k,Wi;
+   static unsigned short x,y;
+   static complex_t m,w,p,q;
    // Reorder array
    //    Imaginary part is empty 
    //    at this stage so use it
@@ -32,17 +34,18 @@ void fft(complex_t * a){
          // or with x takes other half
          if(!(x & j)) { 
             // Twiddle index
-            Wi = (j * y) % (x * y);
+            Wi = (j * y) % N_2;
             // Move over the points
             // of interest from 
             // external ram
-            k  = j | x; 
-            p  = a[j];  
-            q  = a[k];
+            k = j | x; 
+            w = W[Wi];
+            p = a[j];  
+            q = a[k];
             // Butterfly of
             // complex numbers 
-            m.re    = (W.re * q.re) - (W.im * q.im);
-            m.im    = (W.re * q.im) + (W.im * q.re); 
+            m.re = (((w.re * q.re) - (w.im * q.im))/SCALE);
+            m.im = (((w.re * q.im) + (w.im * q.re))/SCALE); 
             a[j].re = p.re + m.re;
             a[j].im = p.im + m.im;
             a[k].re = p.re - m.re;
@@ -53,5 +56,20 @@ void fft(complex_t * a){
       x <<= 1;
       // / 2
       y >>= 1;
-   } 
+   }
+   return; 
+}
+
+unsigned short mag(complex_t a){
+   static unsigned short s, sqrt, p0_sqrt;
+   // Square and sum
+   s = (a.re * a.re) + (a.im * a.im); 
+   // Converge on the square root
+   sqrt    = s >> 1;
+   p0_sqrt = 0; 
+   while(sqrt != p0_sqrt){   
+      p0_sqrt = sqrt;
+      sqrt    = ((s / sqrt) + sqrt) >> 1; 
+   }
+   return sqrt;
 }

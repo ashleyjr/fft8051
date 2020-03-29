@@ -2,18 +2,16 @@
 #include "fft8051.h"
 
 int main(int argc, char *argv[]){
-  
-   char i;
-   complex_t in[N];
-
+   unsigned char i;
+   complex_t t[N];
    for(i=0;i<N;i++){
-      in[i].re = i;
-      in[i].im = i;
+      t[i].re = (i % 2);
+      t[i].im = 0;
    }
-   fft(in);
-   for(i=0;i<N;i++){
-      printf("%d\n\r", in[i].re);
+   fft(t);
+   for(i=0;i<N-1;i++){
+      printf("%d,", mag(t[i]));
    }
-
+   printf("%d\n\r", mag(t[N-1]));
    return 0;
 }
