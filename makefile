@@ -1,5 +1,5 @@
 all:
-	sdcc src/main.c -I inc/
+	sdcc src/main.c -I inc/ --iram-size 256 --xram-size 256 --model-large 
 
 clean:
 	-rm -f main.asm

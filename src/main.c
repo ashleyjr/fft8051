@@ -9,8 +9,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 64 
-#define UART_SIZE_TX 64
+#define UART_SIZE_RX 4 
+#define UART_SIZE_TX 4
 
 #define FLOAT_OFFSET 1e3
 #define FLOAT_SCALE 1e6
@@ -20,6 +20,11 @@
 
 #define PI     3.1415
 #define PI_2   1.5707
+
+
+#define LOG2N  4
+#define N      (1 << LOG2N)
+
 
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
@@ -50,9 +55,7 @@ void  setup(void);
 void  cadd(complex_t * a, complex_t * b, complex_t * c);
 void  cmul(complex_t * a, complex_t * b, complex_t * c);
 
-U32   reverse(U32 size, U32 num);
-
-float clog2(float n);
+void  order(complex_t * b);
 
 float cordic(U8 cos_n_sin, float theta);
 float sin(float theta);
@@ -105,17 +108,17 @@ static const float cordic_lut[CORDIC_LUT_SIZE] ={
 // Global Variables
 //-----------------------------------------------------------------------------
 
-__xdata volatile U8 uart_tx[UART_SIZE_TX];
-__xdata volatile U8 tx_head;
-__xdata volatile U8 tx_tail;
-__xdata volatile U8 tx_head_wrap;
-__xdata volatile U8 tx_tail_wrap;
+volatile U8 uart_tx[UART_SIZE_TX];
+volatile U8 tx_head;
+volatile U8 tx_tail;
+volatile U8 tx_head_wrap;
+volatile U8 tx_tail_wrap;
 
-__xdata volatile U8 uart_rx[UART_SIZE_RX];
-__xdata volatile U8 rx_head;
-__xdata volatile U8 rx_tail;
-__xdata volatile U8 rx_head_wrap;
-__xdata volatile U8 rx_tail_wrap;
+volatile U8 uart_rx[UART_SIZE_RX];
+volatile U8 rx_head;
+volatile U8 rx_tail;
+volatile U8 rx_head_wrap;
+volatile U8 rx_tail_wrap;
 
 //-----------------------------------------------------------------------------
 // Main Routine
@@ -130,6 +133,9 @@ void main (void){
    #ifdef REV_TEST
    __xdata U32 size, num;
    #endif
+
+   static __xdata complex_t s[N]; 
+   static U16 i;
 
    uartInit();     
    setup();
@@ -154,11 +160,7 @@ void main (void){
       
       #ifdef CORDIC_TEST
       uartTxFloat(sin(uartRxFloat()));
-      #endif
-      
-      #ifdef CLOG2_TEST
-      uartTxFloat(clog2(uartRxFloat()));
-      #endif
+      #endif 
       
       #ifdef COMPLEX_TEST
       a.re = uartRxFloat();
@@ -174,13 +176,16 @@ void main (void){
       uartTxFloat(b.re);
       uartTxFloat(b.im);
       #endif
-
-      #ifdef REV_TEST
-      size = (U32)uartRxFloat();
-      num  = (U32)uartRxFloat();
-      num  = reverse(size,num); 
-      uartTxFloat((float)num);
-      #endif
+      
+      for(i=0;i<N;i++){
+         s[i].re = uartRxFloat();
+         s[i].im = uartRxFloat();
+      }
+      order(s);
+      for(i=0;i<N;i++){
+         uartTxFloat(s[i].re);
+         uartTxFloat(s[i].im);
+      } 
 
    }
 } 
@@ -243,32 +248,27 @@ void cmul(complex_t * a, complex_t * b, complex_t * c){
 // Ordering
 //-----------------------------------------------------------------------------
 
-U32 reverse(U32 size, U32 num) {
-   // Reverse the bit order
-   U32 p = 0;
-   U8 i;
-   size = (U8)clog2((float)size);
-   for(i = 1; i <= size; i++) {
-      if(num & (1 << (size - i)))
-         p |= 1 << (i - 1);
-      }
-   return p;
-}
 
-//-----------------------------------------------------------------------------
-// Logs
-//-----------------------------------------------------------------------------
-
-float clog2(float n){
-   U32 i;
-   U8 j;
-   i = (U32)n;
-   j = 0;
-   while(i){
-      i >>= 1;
-      j++;
+void order(complex_t * b){
+   static complex_t b_temp[N];
+   static U16 i,j,k; 
+   // New ordered array
+   for(i=0;i<N;i++){ 
+      k = 0;
+      // Reverse bits
+      for(j = 1; j <= LOG2N; j++) {
+         if(i & (1 << (LOG2N - j)))
+            k |= 1 << (j - 1);
+      }  
+      // Move around  
+      b_temp[i].re = b[k].re;
+      b_temp[i].im = b[k].im;
    }
-   return (float)j;
+   // Copy new array back to the source
+   for(i=0;i<N;i++){
+      b[i].re = b_temp[i].re;
+      b[i].im = b_temp[i].im;
+   }
 }
 
 //-----------------------------------------------------------------------------
@@ -276,9 +276,9 @@ float clog2(float n){
 //-----------------------------------------------------------------------------
 
 float cordic(U8 cos_n_sin, float theta){
-   __xdata float d,x,x_next,y,z; 
-   U8 i;
-   U8 is_neg;
+   static float d,x,x_next,y,z; 
+   static U8 i;
+   static U8 is_neg;
    x = 1;
    y = 0;  
   

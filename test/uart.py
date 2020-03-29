@@ -29,6 +29,9 @@ class uart:
             bytesize=serial.EIGHTBITS
         )
 
+        self.ser.flushInput()
+        self.ser.flushOutput()
+
         self.rx_buf = [0] * self.RX_BUFFER_SIZE
         self.rx_buf_head = 0
         self.rx_buf_tail = 0
