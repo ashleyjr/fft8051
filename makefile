@@ -1,5 +1,11 @@
+SCALE=2
+LOG2N=7
+
 all:
-	sdcc src/main.c -I inc/ --iram-size 256 --xram-size 256 --model-large 
+	rm -rf common/Ws.h
+	python common/lib/python/Ws.py > common/Ws.h ${LOG2N} ${SCALE}
+	sdcc -c common/fft8051.c -I common/ -DLOG2N=${LOG2N} -DSCALE=${SCALE}
+	sdcc src/main.c fft8051.rel -I inc/ -I common/ -DLOG2N=${LOG2N} -DSCALE=${SCALE} --iram-size 256 --xram-size 256 
 
 clean:
 	-rm -f main.asm

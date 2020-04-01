@@ -39,9 +39,12 @@ void fft(complex_t * a){
             // of interest from 
             // external ram
             k = j | x; 
-            w = W[Wi];
-            p = a[j];  
-            q = a[k];
+            w.re = W[Wi].re;
+            w.im = W[Wi].im;
+            p.re = a[j].re;
+            p.im = a[j].im;
+            q.re = a[k].re;
+            q.im = a[k].im;
             // Butterfly of
             // complex numbers 
             m.re = (((w.re * q.re) - (w.im * q.im))/SCALE);
@@ -60,14 +63,17 @@ void fft(complex_t * a){
    return; 
 }
 
-unsigned short mag(complex_t a){
-   static unsigned short s, sqrt, p0_sqrt;
+unsigned short mag(complex_t * a){
+   static unsigned short s, sqrt, p0_sqrt, p1_sqrt;
    // Square and sum
-   s = (a.re * a.re) + (a.im * a.im); 
+   s = (a->re * a->re) + (a->im * a->im); 
    // Converge on the square root
    sqrt    = s >> 1;
    p0_sqrt = 0; 
-   while(sqrt != p0_sqrt){   
+   p1_sqrt = 0;
+   while((sqrt != p1_sqrt) &&
+         (sqrt != p0_sqrt)){   
+      p1_sqrt = p0_sqrt;
       p0_sqrt = sqrt;
       sqrt    = ((s / sqrt) + sqrt) >> 1; 
    }

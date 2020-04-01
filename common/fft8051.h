@@ -24,6 +24,6 @@ typedef struct {
 //-----------------------------------------------------------------------------
 
 void fft(complex_t * a);
-unsigned short mag(complex_t a);
+unsigned short mag(complex_t * a);
 
 #endif

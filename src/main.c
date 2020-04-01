@@ -4,6 +4,7 @@
 
 #include "SI_C8051F850_Register_Enums.h"
 #include "SI_C8051F850_Defs.h"
+#include "fft8051.h"
 
 //-----------------------------------------------------------------------------
 // Defines
@@ -12,20 +13,6 @@
 #define UART_SIZE_RX 4 
 #define UART_SIZE_TX 4
 
-#define FLOAT_OFFSET 1e3
-#define FLOAT_SCALE 1e6
-
-#define CORDIC_LUT_SIZE 20
-#define CORDIC_GAIN 0.609
-
-#define PI     3.1415
-#define PI_2   1.5707
-
-
-#define LOG2N  4
-#define N      (1 << LOG2N)
-
-
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
 SBIT(TIME, SFR_P0, 0);  
@@ -33,33 +20,10 @@ SBIT(BUT0, SFR_P1, 7);
 SBIT(BUT1, SFR_P2, 1);  
 
 //-----------------------------------------------------------------------------
-// Typedefs
-//-----------------------------------------------------------------------------
-
-typedef union {
-   float floating;
-   U32   integer;
-} flint_t; 
-
-typedef struct {
-   float re;
-   float im;
-} complex_t; 
-
-//-----------------------------------------------------------------------------
 // Prototypes
 //-----------------------------------------------------------------------------
 
 void  setup(void);
-
-void  cadd(complex_t * a, complex_t * b, complex_t * c);
-void  cmul(complex_t * a, complex_t * b, complex_t * c);
-
-void  order(complex_t * b);
-
-float cordic(U8 cos_n_sin, float theta);
-float sin(float theta);
-float cos(float theta);
 
 void  uartInit(void);
 void  uartTx(U8 tx);
@@ -74,35 +38,6 @@ U8    uartTxWrap(void);
 U8    uartTxWrapN(void);
 U8    uartTxEmpty(void);
 U8    uartTxFull(void);
-void  uartTxFloat(float tx);
-float uartRxFloat(void);
-
-//-----------------------------------------------------------------------------
-// Look Up Tables
-//-----------------------------------------------------------------------------
-
-static const float cordic_lut[CORDIC_LUT_SIZE] ={
-   0.785398163397, // = arctan(2^-0)	
-   0.463647609001, // = arctan(2^-1)	
-   0.244978663127, // = arctan(2^-2)	
-   0.124354994547, // = arctan(2^-3)	
-   0.062418809996, // = arctan(2^-4)	
-   0.031239833430, // = arctan(2^-5)	
-   0.015623728620, // = arctan(2^-6)	
-   0.007812341060, // = arctan(2^-7)	
-   0.003906230132, // = arctan(2^-8)	
-   0.001953122516, // = arctan(2^-9)	
-   0.000976562190, // = arctan(2^-10)	
-   0.000488281211, // = arctan(2^-11)	
-   0.000244140620, // = arctan(2^-12)	
-   0.000122070312, // = arctan(2^-13)	
-   0.000061035156, // = arctan(2^-14)	
-   0.000030517578, // = arctan(2^-15)	
-   0.000015258789, // = arctan(2^-16)
-   0.000007639495, // = arctan(2^-17)
-   0.000003814697, // = arctan(2^-18)
-   0.000001907348  // = arctan(2^-19)	
-};
 
 //-----------------------------------------------------------------------------
 // Global Variables
@@ -126,16 +61,8 @@ volatile U8 rx_tail_wrap;
 
 void main (void){    
     
-   #ifdef COMPLEX_TEST
-   __xdata complex_t a,b,c;
-   #endif 
-
-   #ifdef REV_TEST
-   __xdata U32 size, num;
-   #endif
-
    static __xdata complex_t s[N]; 
-   static U16 i;
+   static unsigned char i;
 
    uartInit();     
    setup();
@@ -144,49 +71,15 @@ void main (void){
    LED0 = 1;  
    LED1 = 1;
 
-   while(1){   
-      #ifdef BUFFER_TEST
-      while(!uartRxFull());
-      while(!uartRxEmpty()){
-         uartTx(uartRx());  
-      }
-      while(!uartTxEmpty());
-      uartInit();
-      #endif
-     
-      #ifdef BANDWIDTH_TEST
-      uartTx(uartRx());
-      #endif
-      
-      #ifdef CORDIC_TEST
-      uartTxFloat(sin(uartRxFloat()));
-      #endif 
-      
-      #ifdef COMPLEX_TEST
-      a.re = uartRxFloat();
-      a.im = uartRxFloat();
-      b.re = uartRxFloat();
-      b.im = uartRxFloat();
-      
-      cadd(&a,&b,&c);
-      cmul(&a,&c,&b);
-        
-      // b = a * (a + b)  
-      
-      uartTxFloat(b.re);
-      uartTxFloat(b.im);
-      #endif
-      
+   while(1){    
       for(i=0;i<N;i++){
-         s[i].re = uartRxFloat();
-         s[i].im = uartRxFloat();
+         s[i].re = 128 - uartRx();
+         s[i].im = 0;
       }
-      order(s);
+      fft(s);
       for(i=0;i<N;i++){
-         uartTxFloat(s[i].re);
-         uartTxFloat(s[i].im);
-      } 
-
+         uartTx(128 + (char)mag(&s[i]));
+      }
    }
 } 
 
@@ -231,115 +124,6 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 
 
 //-----------------------------------------------------------------------------
-// Complex ops
-//-----------------------------------------------------------------------------
-
-void cadd(complex_t * a, complex_t * b, complex_t * c){
-   c->re = a->re + b->re;
-   c->im = a->im + b->im;
-}
-
-void cmul(complex_t * a, complex_t * b, complex_t * c){
-   c->re = (a->re * b->re) - (a->im * b->im);
-   c->im = (a->re * b->im) + (a->im * b->re);
-}
-
-//-----------------------------------------------------------------------------
-// Ordering
-//-----------------------------------------------------------------------------
-
-
-void order(complex_t * b){
-   static complex_t b_temp[N];
-   static U16 i,j,k; 
-   // New ordered array
-   for(i=0;i<N;i++){ 
-      k = 0;
-      // Reverse bits
-      for(j = 1; j <= LOG2N; j++) {
-         if(i & (1 << (LOG2N - j)))
-            k |= 1 << (j - 1);
-      }  
-      // Move around  
-      b_temp[i].re = b[k].re;
-      b_temp[i].im = b[k].im;
-   }
-   // Copy new array back to the source
-   for(i=0;i<N;i++){
-      b[i].re = b_temp[i].re;
-      b[i].im = b_temp[i].im;
-   }
-}
-
-//-----------------------------------------------------------------------------
-// Sine/Cosine
-//-----------------------------------------------------------------------------
-
-float cordic(U8 cos_n_sin, float theta){
-   static float d,x,x_next,y,z; 
-   static U8 i;
-   static U8 is_neg;
-   x = 1;
-   y = 0;  
-  
-   is_neg = 0;
-   z = theta; 
-   // Pull in to -pi < z < pi
-   while(PI < z){  
-      z -= 2*PI;
-   }
-   while(z < -PI){
-      z += 2*PI;
-   }
-   // Mirror
-   if(PI_2 < z){
-      z -= PI;
-      is_neg = 1;
-   }
-   if(z < -PI_2){
-      z += PI;
-      is_neg = 1;
-   } 
-   d = 1;
-   for(i=0;i<CORDIC_LUT_SIZE;i++){  
-      if(z < 0){
-         x_next = x + (d*y);
-         y -= (d*x); 
-         z += cordic_lut[i]; 
-      } else {
-         x_next = x - (d*y);
-         y += (d*x); 
-         z -= cordic_lut[i];
-      }
-      x = x_next;
-      d /= 2; 
-   }
-   if(0 == cos_n_sin){
-      y = y * CORDIC_GAIN;
-      if(1 == is_neg){
-         return -y;
-      }else{
-         return y;
-      }
-   }else{
-      x = x * CORDIC_GAIN;
-      if(1 == is_neg){
-         return -x;
-      }else{
-         return x;
-      }
-   }
-}
-
-float sin(float theta){ 
-   return cordic(0, theta);
-}
-
-float cos(float theta){
-   return cordic(1, theta);
-}
-
-//-----------------------------------------------------------------------------
 // UART
 //-----------------------------------------------------------------------------
 
@@ -376,29 +160,6 @@ U8 uartRx(void){
       rx_tail_wrap %= 2;
    } 
    return rx;
-}
-
-void uartTxFloat(float tx){
-   // MSB first 
-   flint_t a;
-   a.floating = tx; 
-   uartTx((a.integer >> 24)  & 0xFF);
-   uartTx((a.integer >> 16)  & 0xFF);
-   uartTx((a.integer >> 8)   & 0xFF);
-   uartTx(a.integer          & 0xFF);  
-}
-
-float uartRxFloat(void){
-   // MSB first  
-   flint_t a;
-   a.integer = uartRx();
-   a.integer <<= 8;
-   a.integer|= uartRx();
-   a.integer <<= 8;
-   a.integer |= uartRx();
-   a.integer <<= 8;
-   a.integer |= uartRx(); 
-   return a.floating;
 }
 
 U8 uartRxPtr(void){

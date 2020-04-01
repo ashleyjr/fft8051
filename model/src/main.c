@@ -10,8 +10,8 @@ int main(int argc, char *argv[]){
    }
    fft(t);
    for(i=0;i<N-1;i++){
-      printf("%d,", mag(t[i]));
+      printf("%d,", mag(&t[i]));
    }
-   printf("%d\n\r", mag(t[N-1]));
+   printf("%d\n\r", mag(&t[N-1]));
    return 0;
 }
