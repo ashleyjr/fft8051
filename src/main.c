@@ -11,7 +11,7 @@
 //-----------------------------------------------------------------------------
 
 #define UART_SIZE_RX 4 
-#define UART_SIZE_TX 4
+#define UART_SIZE_TX 4 
 
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
@@ -62,8 +62,8 @@ volatile U8 rx_tail_wrap;
 void main (void){    
     
    static __xdata complex_t s[N]; 
-   static unsigned char i;
-
+   static unsigned int i;
+   static unsigned long t;
    uartInit();     
    setup();
   
@@ -73,12 +73,14 @@ void main (void){
 
    while(1){    
       for(i=0;i<N;i++){
-         s[i].re = 128 - uartRx();
+         s[i].re = uartRx() - 128;
          s[i].im = 0;
       }
       fft(s);
       for(i=0;i<N;i++){
-         uartTx(128 + (char)mag(&s[i]));
+         t = mag(&s[i]);
+         uartTx((char)(t & 0xFF));
+         uartTx((char)((t >> 8) & 0xFF));
       }
    }
 } 

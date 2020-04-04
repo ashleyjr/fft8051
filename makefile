@@ -1,5 +1,5 @@
 SCALE=2
-LOG2N=7
+LOG2N=6
 
 all:
 	rm -rf common/Ws.h
