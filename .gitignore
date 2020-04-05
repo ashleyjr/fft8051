@@ -1,0 +1,5 @@
+Ws.h
+*.o
+*.asm
+*.ihx
+*.lst
