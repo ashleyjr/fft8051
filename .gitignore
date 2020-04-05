@@ -3,3 +3,9 @@ Ws.h
 *.asm
 *.ihx
 *.lst
+*.rel
+*.sym
+*.map
+*.mem
+*.rst
+*.lk
