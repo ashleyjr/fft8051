@@ -1,5 +1,5 @@
-SCALE=32
-LOG2N=7
+SCALE=64
+LOG2N=6
 
 all:
 	rm -rf ../common/Ws.h

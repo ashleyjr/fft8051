@@ -15,8 +15,8 @@
 //-----------------------------------------------------------------------------
 
 typedef struct {
-   int re;  
-   int im;
+   short int re;  
+   short int im;
 } complex_t; 
 
 //-----------------------------------------------------------------------------
@@ -24,6 +24,6 @@ typedef struct {
 //-----------------------------------------------------------------------------
 
 void fft(complex_t * a);
-unsigned long mag(complex_t * a);
+unsigned char mag(complex_t * a);
 
 #endif

@@ -63,19 +63,20 @@ void fft(complex_t * a){
    return; 
 }
 
-unsigned long mag(complex_t * a){
-   static unsigned long s, sqrt, p0_sqrt, p1_sqrt;
+unsigned char mag(complex_t * a){
+   static float s, sqrt, p0_sqrt, p1_sqrt;
    // Square and sum
-   s = (a->re * a->re) + (a->im * a->im); 
+   s = (float)(a->re) * (float)(a->re);
+   s += (float)(a->im) * (float)(a->im); 
    // Converge on the square root
-   sqrt    = s >> 1;
+   sqrt    = s / 2;
    p0_sqrt = 0; 
    p1_sqrt = 0;
    while((sqrt != p1_sqrt) &&
          (sqrt != p0_sqrt)){   
       p1_sqrt = p0_sqrt;
       p0_sqrt = sqrt;
-      sqrt    = ((s / sqrt) + sqrt) >> 1; 
+      sqrt    = ((s / sqrt) + sqrt) / 2; 
    }
-   return sqrt;
+   return (unsigned char)(sqrt/N_2);
 }

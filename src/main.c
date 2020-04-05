@@ -10,8 +10,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 4 
-#define UART_SIZE_TX 4 
+#define UART_SIZE_RX 8 
+#define UART_SIZE_TX 2 
 
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
@@ -62,8 +62,7 @@ volatile U8 rx_tail_wrap;
 void main (void){    
     
    static __xdata complex_t s[N]; 
-   static unsigned int i;
-   static unsigned long t;
+   static unsigned char i; 
    uartInit();     
    setup();
   
@@ -73,14 +72,14 @@ void main (void){
 
    while(1){    
       for(i=0;i<N;i++){
-         s[i].re = uartRx() - 128;
+         s[i].re = (short)(uartRx()) - 128;
          s[i].im = 0;
       }
-      fft(s);
+      //fft(s);
       for(i=0;i<N;i++){
-         t = mag(&s[i]);
-         uartTx((char)(t & 0xFF));
-         uartTx((char)((t >> 8) & 0xFF));
+         //uartTx(uartRx());
+         //while(!uartTxEmpty());
+         uartTx((unsigned char)(s[i].re + 128));//mag(&s[i]));
       }
    }
 } 
@@ -88,8 +87,7 @@ void main (void){
 //-----------------------------------------------------------------------------
 // Interrupts
 //-----------------------------------------------------------------------------
-
-INTERRUPT (TIMER2_ISR, TIMER2_IRQn){        
+INTERRUPT (TIMER1_ISR, TIMER1_IRQn){        
    // UART RX
    if(SCON0_RI){ 
       SCON0_RI = 0; 
@@ -105,8 +103,10 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
             rx_head_wrap %= 2;
          }
       }
-   }
-   
+   } 
+}
+
+INTERRUPT (TIMER2_ISR, TIMER2_IRQn){          
    // UART TX
    if(!uartTxEmpty()){
       SBUF0 = uart_tx[tx_tail]; 
@@ -116,12 +116,9 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
          tx_tail_wrap++;
          tx_tail_wrap %= 2;
       } 
-   }
-   
-   // Timer
-   TMR2H = 253;     // Reset timer
-   TMR2L = 240;     // Tuned for baud rate
-   TMR2CN_TF2H = 0;  
+   } 
+   LED0 = (LED0) ? 0 : 1;
+   //TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
 
@@ -249,20 +246,16 @@ void setup(void){
    XBR0     = XBR0_URT0E__ENABLED;              // Route out UART P0.4 
    XBR2     = XBR2_WEAKPUD__PULL_UPS_ENABLED | 
               XBR2_XBARE__ENABLED;					 
-   // Timer 0
+   // Timer control
 	CKCON    = CKCON_T0M__PRESCALE|
-              CKCON_SCA__SYSCLK_DIV_48;
-	TMOD     = TMOD_T0M__MODE2;
-	TCON     = TCON_TR0__RUN; 
-   TH0      = 0x80;                             // Magic values from datasheet
-	TL0      = 0x80;
+              CKCON_SCA__SYSCLK_DIV_12;  
    // Setup 230400 Baud UART 
    // BAUD gen on timer 1
 	CKCON    |= CKCON_T1M__SYSCLK;
 	TMOD     |= TMOD_T1M__MODE2;
 	TCON     |= TCON_TR1__RUN; 
-   TH1      = 0xCB;                             // Magic values from datasheet
-	TL1      = 0xCB;
+   TH1      = 0x2B;                             // Magic values from datasheet
+	TL1      = 0x2B;
    // UART
 	SCON0    |= SCON0_REN__RECEIVE_ENABLED;
    // Start 95.7KHz clock 
@@ -270,13 +263,21 @@ void setup(void){
               PCA0CPM0_PWM__ENABLED;
    PCA0CN   = PCA0CN_CR__RUN;   
    // Timer 2
-	TMR2CN   = TMR2CN_TR2__RUN;
+	TMR2CN   = TMR2CN_TR2__RUN |
+              TMR2CN_T2SPLIT__8_BIT_RELOAD;
+               // |
+              //TMR2CN_TF2CEN__ENABLED;
+   TMR2L   = 0x00;
+   TMR2H   = 0x00;
+   TMR2RLL  = 0x00;
+   TMR2RLH  = 0x00;
    // ADC
    ADC0MX   = ADC0MX_ADC0MX__ADC0P10; 
    ADC0CN0  = ADC0CN0_ADEN__ENABLED; 
    // Interrupt
 	IE       = IE_EA__ENABLED | 
 		        IE_ET0__ENABLED|
+              IE_ET1__ENABLED|
               IE_ET2__ENABLED; 
 }
 
