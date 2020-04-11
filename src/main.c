@@ -75,11 +75,9 @@ void main (void){
          s[i].re = (short)(uartRx()) - 128;
          s[i].im = 0;
       }
-      //fft(s);
+      fft(s);
       for(i=0;i<N;i++){
-         //uartTx(uartRx());
-         //while(!uartTxEmpty());
-         uartTx((unsigned char)(s[i].re + 128));//mag(&s[i]));
+         uartTx((unsigned char)(mag(&s[i])));
       }
    }
 } 
@@ -118,7 +116,7 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
       } 
    } 
    LED0 = (LED0) ? 0 : 1;
-   //TMR2CN &= ~TMR2CN_TF2H__SET;
+   TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
 
@@ -263,14 +261,11 @@ void setup(void){
               PCA0CPM0_PWM__ENABLED;
    PCA0CN   = PCA0CN_CR__RUN;   
    // Timer 2
-	TMR2CN   = TMR2CN_TR2__RUN |
-              TMR2CN_T2SPLIT__8_BIT_RELOAD;
-               // |
-              //TMR2CN_TF2CEN__ENABLED;
-   TMR2L   = 0x00;
-   TMR2H   = 0x00;
+	TMR2CN   = TMR2CN_TR2__RUN;
+   TMR2L    = 0x00;
+   TMR2H    = 0xE0;
    TMR2RLL  = 0x00;
-   TMR2RLH  = 0x00;
+   TMR2RLH  = 0xE0;
    // ADC
    ADC0MX   = ADC0MX_ADC0MX__ADC0P10; 
    ADC0CN0  = ADC0CN0_ADEN__ENABLED; 

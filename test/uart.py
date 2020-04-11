@@ -36,8 +36,7 @@ class uart:
         self.rx_buf_head = 0
         self.rx_buf_tail = 0
 
-        self.stop = False
-        threading.Thread(target=self.rx_buffer).start()
+
 
     def getName(self):
         return self.name
@@ -55,12 +54,9 @@ class uart:
         return
 
     def rx(self):
-        while(self.rx_buf_tail == self.rx_buf_head):
+        while(self.ser.inWaiting() == 0):
             pass
-        d = self.rx_buf[self.rx_buf_tail]
-        self.rx_buf_tail += 1
-        self.rx_buf_tail %= self.RX_BUFFER_SIZE
-        return d
+        return ord(self.ser.read(1))
 
     def rxWaiting(self):
         return self.rx_buf_head - self.rx_buf_tail
