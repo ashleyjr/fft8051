@@ -9,3 +9,4 @@ Ws.h
 *.mem
 *.rst
 *.lk
+*.pyc
