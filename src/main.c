@@ -10,8 +10,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 8 
-#define UART_SIZE_TX 2 
+#define UART_SIZE_RX 2 
+#define UART_SIZE_TX 32 
 
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
@@ -55,29 +55,41 @@ volatile U8 rx_tail;
 volatile U8 rx_head_wrap;
 volatile U8 rx_tail_wrap;
 
+volatile static __xdata complex_t s[N]; 
+volatile static unsigned char i; 
+volatile static unsigned char s_ptr;
+
 //-----------------------------------------------------------------------------
 // Main Routine
 //-----------------------------------------------------------------------------
 
 void main (void){    
-    
-   static __xdata complex_t s[N]; 
-   static unsigned char i; 
+   
+  
    uartInit();     
    setup();
-  
+ 
+
+   s_ptr = 0;
    // LEDs off
-   LED0 = 1;  
-   LED1 = 1;
+   LED0 = 0;  
+   LED1 = 0;
 
    while(1){    
-      for(i=0;i<N;i++){
-         s[i].re = (short)(uartRx()) - 128;
-         s[i].im = 0;
-      }
+      while(s_ptr != N); 
+      // Sync byte    
+      uartTx((unsigned char)255);
+      // FFT it
       fft(s);
-      for(i=0;i<N;i++){
-         uartTx((unsigned char)(mag(&s[i])));
+      // Start new sample
+      s_ptr = 0;
+      // Use the imaginary side while filling real 
+      for(i=0;i<(N/2);i++){
+         s[(N/2)+i].im = mag(&s[N-i]); 
+      }
+      // Rest of the bytes 
+      for(i=(N/2);i<N;i++){
+         uartTx(s[i].im); 
       }
    }
 } 
@@ -105,6 +117,9 @@ INTERRUPT (TIMER1_ISR, TIMER1_IRQn){
 }
 
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){          
+   
+   LED0 = 0 ;
+
    // UART TX
    if(!uartTxEmpty()){
       SBUF0 = uart_tx[tx_tail]; 
@@ -114,11 +129,28 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
          tx_tail_wrap++;
          tx_tail_wrap %= 2;
       } 
-   } 
-   LED0 = (LED0) ? 0 : 1;
+   }  
+  
    TMR2CN &= ~TMR2CN_TF2H__SET;
+
+   LED0= 1;
 }
 
+INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
+  
+   // ADC Sample
+   if(s_ptr < N){ 
+      ADC0CN0 |= ADC0CN0_ADBUSY__SET;
+      while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
+      
+      // Places bias at 1V
+      s[s_ptr].re = (ADC0 / 25) - 12;
+      s_ptr++;
+   } 
+   
+   TMR3CN &= ~TMR3CN_TF3H__SET;
+   
+}
 
 //-----------------------------------------------------------------------------
 // UART
@@ -234,20 +266,19 @@ void setup(void){
    // Clock
 	CLKSEL   = CLKSEL_CLKSL__HFOSC 	      |     // Use 24.5MHz interal clock
 			     CLKSEL_CLKDIV__SYSCLK_DIV_1;      // Do not divide     
-   // Setup XBAR     
-   P0MDOUT  = P0MDOUT_B4__PUSH_PULL|            // PWM
-              P0MDOUT_B5__OPEN_DRAIN; 
+   // Setup XBAR       
+   P0MDOUT  = P0MDOUT_B4__PUSH_PULL;
+   P1SKIP   = P1SKIP_B0__SKIPPED|
+              P1SKIP_B1__SKIPPED;
    P1MDOUT  = P1MDOUT_B0__PUSH_PULL|            // LED            
               P1MDOUT_B1__PUSH_PULL;            // LED 
-                                                // Do not skip P1.1 
-   XBR1     = XBR1_PCA0ME__CEX0;                // Route out PCA0.CEX0 on P0.2
    XBR0     = XBR0_URT0E__ENABLED;              // Route out UART P0.4 
-   XBR2     = XBR2_WEAKPUD__PULL_UPS_ENABLED | 
-              XBR2_XBARE__ENABLED;					 
+   XBR2     = XBR2_WEAKPUD__PULL_UPS_DISABLED | 
+              XBR2_XBARE__ENABLED;					  
    // Timer control
 	CKCON    = CKCON_T0M__PRESCALE|
               CKCON_SCA__SYSCLK_DIV_12;  
-   // Setup 230400 Baud UART 
+   // Setup 57600 Baud UART 
    // BAUD gen on timer 1
 	CKCON    |= CKCON_T1M__SYSCLK;
 	TMOD     |= TMOD_T1M__MODE2;
@@ -255,25 +286,34 @@ void setup(void){
    TH1      = 0x2B;                             // Magic values from datasheet
 	TL1      = 0x2B;
    // UART
-	SCON0    |= SCON0_REN__RECEIVE_ENABLED;
-   // Start 95.7KHz clock 
-              PCA0CPM0_MAT__ENABLED   | 
-              PCA0CPM0_PWM__ENABLED;
-   PCA0CN   = PCA0CN_CR__RUN;   
+	SCON0    |= SCON0_REN__RECEIVE_ENABLED; 
    // Timer 2
-	TMR2CN   = TMR2CN_TR2__RUN;
+	TMR2CN   = TMR2CN_TR2__RUN;  
    TMR2L    = 0x00;
-   TMR2H    = 0xE0;
+   TMR2H    = 0xFA;
    TMR2RLL  = 0x00;
-   TMR2RLH  = 0xE0;
+   TMR2RLH  = 0xFA;
+   // Timer 3
+	TMR3CN   = TMR3CN_TR3__RUN;   // 42.63 KHz
+   TMR3L    = 0xD0;
+   TMR3H    = 0xFF;
+   TMR3RLL  = 0xD0;
+   TMR3RLH  = 0xFF;
    // ADC
-   ADC0MX   = ADC0MX_ADC0MX__ADC0P10; 
-   ADC0CN0  = ADC0CN0_ADEN__ENABLED; 
-   // Interrupt
-	IE       = IE_EA__ENABLED | 
-		        IE_ET0__ENABLED|
-              IE_ET1__ENABLED|
-              IE_ET2__ENABLED; 
+   ADC0MX   = ADC0MX_ADC0MX__ADC0P3;
+   ADC0CF   = ADC0CF_ADGN__GAIN_1 |       // ADC gain set to 1
+              ADC0CF_ADTM__TRACK_NORMAL;  // Immediate covert
+   REF0CN   = REF0CN_REFSL__VDD_PIN;      // Ref to VDD
+   ADC0CN0 &= ~ADC0CN0_ADCM__FMASK;
+   ADC0CN0 |= ADC0CN0_ADEN__ENABLED |
+              ADC0CN0_ADCM__ADBUSY; 
+   // Interrupts
+	IE   = IE_EA__ENABLED | 
+		    IE_ET0__ENABLED|
+          IE_ET1__ENABLED|
+          IE_ET2__ENABLED;
+   EIE1 = EIE1_ET3__ENABLED;
+   IP   = IP_PT2__HIGH;    
 }
 
 
