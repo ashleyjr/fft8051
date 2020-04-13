@@ -15,21 +15,6 @@ u = uart()
 
 ''' Run on MCU '''
 u = uart()
-
-def getLock():
-    s = []
-    for i in range(2*(N+1)):
-        s.append(u.rx())
-
-    lock = 0
-    for i in range(N):
-        if (s[i] == 255) and (s[i+N+1] == 255):
-            print "Locked"
-            lock = i + 1
-
-    for i in range(lock+1):
-        u.rx()
-
 ''' Lock '''
 #getLock()
 while(1):
@@ -44,10 +29,16 @@ while(1):
     print rs
     for i in range(20):
         for r in rs:
-            if (r > ((20-i)*(float(20)/20))):
+            if (r > ((20-i)*(float(30)/20))):
                 print "#",
             else:
                 print " ",
         print ""
+    for r in rs:
+        if(r > 0):
+            print "#",
+        else:
+            print " ",
+    print ""
 
 print "Test ends"

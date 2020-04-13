@@ -10,7 +10,7 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 2 
+#define UART_SIZE_RX 2
 #define UART_SIZE_TX 32 
 
 SBIT(LED0, SFR_P1, 0);  
@@ -56,7 +56,6 @@ volatile U8 rx_head_wrap;
 volatile U8 rx_tail_wrap;
 
 volatile static __xdata complex_t s[N]; 
-volatile static unsigned char i; 
 volatile static unsigned char s_ptr;
 
 //-----------------------------------------------------------------------------
@@ -64,7 +63,7 @@ volatile static unsigned char s_ptr;
 //-----------------------------------------------------------------------------
 
 void main (void){    
-   
+   static unsigned char i; 
   
    uartInit();     
    setup();
@@ -76,25 +75,30 @@ void main (void){
    LED1 = 0;
 
    while(1){    
+      #ifdef COMPARE
+      for(i=0;i<N;i++){
+         s[i].re = uartRx() - 128;
+         s[i].im = 0;
+      }
+      fft(s);
+      for(i=0;i<N;i++){
+         uartTx(mag(&s[i]));        
+      } 
+      #endif
+
+
+      #ifndef COMPARE
       while(s_ptr != N); 
       // Sync byte    
       uartTx((unsigned char)255);
       // FFT it
-      fft(s);
-     
-      for(i=0;i<N/2;i++){
+      fft(s); 
+      for(i=0;i<N_2;i++){
          uartTx(mag(&s[i]));        
       }                          
       // Start new sample
-      s_ptr = 0;
-      // Use the imaginary side while filling real 
-      //for(i=0;i<(N/2);i++){
-      //   s[(N/2)+i].im = mag(&s[N-i]); 
-      //}
-      //// Rest of the bytes 
-      //for(i=(N/2);i<N;i++){
-      //   uartTx(s[i].im); 
-      //}
+      s_ptr = 0; 
+      #endif
    }
 } 
 
@@ -105,10 +109,7 @@ INTERRUPT (TIMER1_ISR, TIMER1_IRQn){
    // UART RX
    if(SCON0_RI){ 
       SCON0_RI = 0; 
-      if(uartRxFull()){
-         // Overflow
-         LED1 = 0;
-      }else{
+      if(!uartRxFull()){ 
          uart_rx[rx_head] = SBUF0;
          rx_head++;
          if(rx_head == UART_SIZE_RX){
@@ -150,7 +151,7 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
       while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
       
       // Places bias at 1V
-      s[s_ptr].re = (ADC0 / 25) - 12;
+      s[s_ptr].re = (ADC0 / 12) - 24;
       s_ptr++;
    } 
    

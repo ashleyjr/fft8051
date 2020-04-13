@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "fft8051.h"
 
 int main(int argc, char *argv[]){
