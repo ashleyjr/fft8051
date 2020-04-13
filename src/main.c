@@ -10,8 +10,8 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 2
-#define UART_SIZE_TX 32 
+#define UART_SIZE_RX 38
+#define UART_SIZE_TX 2 
 
 SBIT(LED0, SFR_P1, 0);  
 SBIT(LED1, SFR_P1, 1);  
@@ -63,17 +63,15 @@ volatile static unsigned char s_ptr;
 //-----------------------------------------------------------------------------
 
 void main (void){    
-   static unsigned char i; 
-  
-   uartInit();     
-   setup();
- 
+   static unsigned char i;  
 
-   s_ptr = 0;
-   // LEDs off
+   s_ptr = 0; 
    LED0 = 0;  
    LED1 = 0;
 
+   uartInit();     
+   setup();
+ 
    while(1){    
       #ifdef COMPARE
       for(i=0;i<N;i++){
@@ -92,7 +90,9 @@ void main (void){
       // Sync byte    
       uartTx((unsigned char)255);
       // FFT it
+      LED0 = 1;
       fft(s); 
+      LED0 = 0;
       for(i=0;i<N_2;i++){
          uartTx(mag(&s[i]));        
       }                          
@@ -105,7 +105,9 @@ void main (void){
 //-----------------------------------------------------------------------------
 // Interrupts
 //-----------------------------------------------------------------------------
-INTERRUPT (TIMER1_ISR, TIMER1_IRQn){        
+
+INTERRUPT (TIMER1_ISR, TIMER1_IRQn){   
+   #ifdef COMPARE
    // UART RX
    if(SCON0_RI){ 
       SCON0_RI = 0; 
@@ -118,13 +120,10 @@ INTERRUPT (TIMER1_ISR, TIMER1_IRQn){
             rx_head_wrap %= 2;
          }
       }
-   } 
+   }
+   #endif
 }
-
-INTERRUPT (TIMER2_ISR, TIMER2_IRQn){          
-   
-   LED0 = 0 ;
-
+INTERRUPT (TIMER2_ISR, TIMER2_IRQn){           
    // UART TX
    if(!uartTxEmpty()){
       SBUF0 = uart_tx[tx_tail]; 
@@ -134,11 +133,8 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
          tx_tail_wrap++;
          tx_tail_wrap %= 2;
       } 
-   }  
-  
+   }   
    TMR2CN &= ~TMR2CN_TF2H__SET;
-
-   LED0= 1;
 }
 
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
@@ -151,7 +147,7 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
       while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
       
       // Places bias at 1V
-      s[s_ptr].re = (ADC0 / 12) - 24;
+      s[s_ptr].re = (ADC0 >> 1) - 155;
       s_ptr++;
    } 
    
@@ -285,23 +281,23 @@ void setup(void){
    // Timer control
 	CKCON    = CKCON_T0M__PRESCALE|
               CKCON_SCA__SYSCLK_DIV_12;  
-   // Setup 57600 Baud UART 
+   // Setup 115200 Baud UART 
    // BAUD gen on timer 1
 	CKCON    |= CKCON_T1M__SYSCLK;
 	TMOD     |= TMOD_T1M__MODE2;
 	TCON     |= TCON_TR1__RUN; 
-   TH1      = 0x2B;                             // Magic values from datasheet
-	TL1      = 0x2B;
+   TH1      = 0x96;                             // Magic values from datasheet
+	TL1      = 0x96;
    // UART
 	SCON0    |= SCON0_REN__RECEIVE_ENABLED; 
    // Timer 2
 	TMR2CN   = TMR2CN_TR2__RUN;  
-   TMR2L    = 0x00;
-   TMR2H    = 0xFA;
-   TMR2RLL  = 0x00;
-   TMR2RLH  = 0xFA;
+   TMR2L    = 0xB0;
+   TMR2H    = 0xFF;
+   TMR2RLL  = 0xB0;
+   TMR2RLH  = 0xFF;
    // Timer 3
-	TMR3CN   = TMR3CN_TR3__RUN;   // 42.63 KHz
+	TMR3CN   = TMR3CN_TR3__RUN;   // ~44 KHz
    TMR3L    = 0xD0;
    TMR3H    = 0xFF;
    TMR3RLL  = 0xD0;

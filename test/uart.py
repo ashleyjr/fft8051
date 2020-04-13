@@ -8,7 +8,7 @@ from optparse import OptionParser
 import math
 
 class uart:
-    BAUDRATE= 57600
+    BAUDRATE= 115200
     RX_BUFFER_SIZE = 1024
 
     def __init__(self):

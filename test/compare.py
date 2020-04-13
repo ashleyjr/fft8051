@@ -17,7 +17,7 @@ u = uart()
 s = []
 for i in range(N):
     t = float(i)/N
-    amps  = [10, 10]
+    amps  = [50, 50]
     freqs = [100, 200]
     v= int(amps[0]*np.sin(freqs[0]*t*math.pi))
     for i in range(1,len(amps)):
@@ -38,17 +38,14 @@ fft_model = []
 fs = out.split(",")
 for f in fs:
     fft_model.append(int(f))
-print fft_model
 
 ''' Run on MCU '''
 u = uart()
 for i in range(N):
     u.tx(s[i] + 128)
-    print s[i] + 128
 fft_uart = []
 for i in range(N):
     r = u.rx()
-    print i,r
     fft_uart.append(r)
 u.finish()
 

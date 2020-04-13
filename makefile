@@ -1,4 +1,4 @@
-SCALE=64
+SCALE=10000
 LOG2N=6
 
 all:

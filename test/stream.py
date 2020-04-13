@@ -29,7 +29,7 @@ while(1):
     print rs
     for i in range(20):
         for r in rs:
-            if (r > ((20-i)*(float(30)/20))):
+            if (r > ((20-i)*(float(150)/20))):
                 print "#",
             else:
                 print " ",
