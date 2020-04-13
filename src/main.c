@@ -81,16 +81,20 @@ void main (void){
       uartTx((unsigned char)255);
       // FFT it
       fft(s);
+     
+      for(i=0;i<N/2;i++){
+         uartTx(mag(&s[i]));        
+      }                          
       // Start new sample
       s_ptr = 0;
       // Use the imaginary side while filling real 
-      for(i=0;i<(N/2);i++){
-         s[(N/2)+i].im = mag(&s[N-i]); 
-      }
-      // Rest of the bytes 
-      for(i=(N/2);i<N;i++){
-         uartTx(s[i].im); 
-      }
+      //for(i=0;i<(N/2);i++){
+      //   s[(N/2)+i].im = mag(&s[N-i]); 
+      //}
+      //// Rest of the bytes 
+      //for(i=(N/2);i<N;i++){
+      //   uartTx(s[i].im); 
+      //}
    }
 } 
 
@@ -137,7 +141,9 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 }
 
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
-  
+ 
+   LED1 = (LED1) ? 0 : 1;
+
    // ADC Sample
    if(s_ptr < N){ 
       ADC0CN0 |= ADC0CN0_ADBUSY__SET;
