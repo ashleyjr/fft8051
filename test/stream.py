@@ -11,6 +11,7 @@ import time
 print "Test begins"
 
 N = 32
+H = 170
 u = uart()
 
 ''' Run on MCU '''
@@ -27,9 +28,9 @@ while(1):
     for i in range(N):
         rs.append(u.rx())
     print rs
-    for i in range(20):
+    for i in range(N):
         for r in rs:
-            if (r > ((20-i)*(float(150)/20))):
+            if (r > ((N-i)*(float(H)/N))):
                 print "#",
             else:
                 print " ",
