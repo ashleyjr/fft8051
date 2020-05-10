@@ -1,0 +1,6 @@
+(sym_lib_table
+  (lib (name fft8051)(type Legacy)(uri ${KIPRJMOD}/fft8051.lib)(options "")(descr ""))
+  (lib (name power)(type Legacy)(uri ${KIPRJMOD}/power.lib)(options "")(descr ""))
+  (lib (name MAX1626)(type Legacy)(uri /Users/ashleyr/Desktop/fft8051/hardware/fft8051/MAX1626/MAX1626.lib)(options "")(descr ""))
+  (lib (name fft8051-rescue)(type Legacy)(uri ${KIPRJMOD}/fft8051-rescue.lib)(options "")(descr ""))
+)

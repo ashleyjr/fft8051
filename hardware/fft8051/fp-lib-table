@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name fft8051)(type KiCad)(uri ${KIPRJMOD}/fft8051.pretty)(options "")(descr ""))
+  (lib (name MAX1626)(type KiCad)(uri /Users/ashleyr/Desktop/fft8051/hardware/fft8051/MAX1626/footprints.pretty)(options "")(descr ""))
+)
