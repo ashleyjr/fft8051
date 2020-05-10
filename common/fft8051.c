@@ -4,7 +4,7 @@
 void fft(complex_t * a){
    static unsigned char i,j,k,Wi;
    static unsigned short x,y;
-   static complex_t m,w,p,q;
+   static complex_t m; 
    // Reorder array
    //    Imaginary part is empty 
    //    at this stage so use it
@@ -39,20 +39,14 @@ void fft(complex_t * a){
             // of interest from 
             // external ram
             k = j | x; 
-            w.re = W[Wi].re;
-            w.im = W[Wi].im;
-            p.re = a[j].re;
-            p.im = a[j].im;
-            q.re = a[k].re;
-            q.im = a[k].im;
             // Butterfly of
             // complex numbers 
-            m.re = (((w.re * q.re) - (w.im * q.im))/SCALE);
-            m.im = (((w.re * q.im) + (w.im * q.re))/SCALE); 
-            a[j].re = p.re + m.re;
-            a[j].im = p.im + m.im;
-            a[k].re = p.re - m.re;
-            a[k].im = p.im - m.im;
+            m.re = (short)((Wreal[Wi] * a[k].re) - (Wimag[Wi] * a[k].im));
+            m.im = (short)((Wreal[Wi] * a[k].im) + (Wimag[Wi] * a[k].re));  
+            a[k].re = a[j].re - m.re;
+            a[k].im = a[j].im - m.im;
+            a[j].re = a[j].re + m.re;
+            a[j].im = a[j].im + m.im;         
          }
       }
       // * 2
