@@ -4,14 +4,21 @@
 
 #include "SI_C8051F850_Register_Enums.h"
 #include "SI_C8051F850_Defs.h"
-#include "fft8051.h"
+//#include "fft8051.h"
 
 //-----------------------------------------------------------------------------
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 2
-#define UART_SIZE_TX 2 
+#define UART_SIZE_RX 20
+#define UART_SIZE_TX 5
+
+#define DISP_SRC_0      0x70
+#define DISP_SRC_1      0x74
+#define DISP_SINK_0     0x7E
+#define DISP_SINK_1     0x7A
+#define DISP_SINK_2     0x76
+#define DISP_SINK_3     0x72
 
 #define  WRITE                    0x00 // SMBus WRITE command
 #define  READ                     0x01 // SMBus READ command
@@ -25,17 +32,65 @@
 #define  SMB_MRDB                 0x80 // (MR) data byte received
 
 
-SBIT(LED0, SFR_P1, 0);  
-SBIT(LED1, SFR_P1, 1);  
-SBIT(SDA, SFR_P0, 0);                  // SMBus on P0.0
-SBIT(SCL, SFR_P0, 1);                  // and P0.1
+SBIT(SHDN, SFR_P1, 0);  
+SBIT(LED,  SFR_P1, 1);  
+SBIT(TIME, SFR_P0, 0);  
+SBIT(BUT0, SFR_P1, 7);  
+SBIT(BUT1, SFR_P2, 1);  
 
+
+static const U8 sink_lut[4] = {
+   DISP_SINK_0,
+   DISP_SINK_1,
+   DISP_SINK_2,
+   DISP_SINK_3,
+};
+
+static const U16 cols[32] = {
+   0b1010101010101010, 
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010,
+   0b1010101010101010
+};
 
 //-----------------------------------------------------------------------------
 // Prototypes
 //-----------------------------------------------------------------------------
 
 void  setup(void);
+
+void  driver(void);
+void  disp (U16 src, U32 sink);
+
+void  smbWrite(U8 addr, U8 data);
 
 void  uartInit(void);
 void  uartTx(U8 tx);
@@ -67,117 +122,123 @@ volatile U8 rx_tail;
 volatile U8 rx_head_wrap;
 volatile U8 rx_tail_wrap;
 
-volatile static __xdata complex_t s[N]; 
-volatile static unsigned char s_ptr;
+//volatile static __xdata complex_t s[N]; 
+//volatile static unsigned char s_ptr;
 
-
-
-U8 SMB_DATA_IN;                        // Global holder for SMBus data
-                               // All receive data is written here
-
-U8 SMB_DATA_OUT;                       // Global holder for SMBus data.
-                               // All transmit data is read from here
-
-U8 TARGET;                             // Target SMBus slave address
-
-volatile U8 SMB_BUSY;                 // Software flag to indicate when the
-                                       // SMB_Read() or SMB_Write() functions
-                                       // have claimed the SMBus
-
+volatile U8 smb_data_out;                       // Global holder for SMBus data.
+volatile U8 smb_target;                             // Target SMBus slave address
+volatile U8 smb_busy;                 // Software flag to indicate when the
 volatile U8 SMB_RW;                   // Software flag to indicate the
-                                       // direction of the current transfer
 
-
-
-
-
-
-
-
-
-
-
-
+volatile U8 disp_on;
+volatile U8 colu;
+volatile U8 coll;
+volatile U8 state;
 
 //-----------------------------------------------------------------------------
 // Main Routine
 //-----------------------------------------------------------------------------
 
 void main (void){    
-   static unsigned long i,j;  
-
-   s_ptr = 0; 
-   LED0 = 0;  
-   LED1 = 0;
+   static unsigned char i,j;
+  
+   //s_ptr = 0; 
+   SHDN = 1;  
+   LED  = 1;
+   
+   // Driver state machine
+   disp_on = 0;
+   colu = 16;
+   coll = 0;
+   state = 0;
 
    uartInit();     
    setup();
+ 
+   i = 0;
 
-   while(1){
-   
-   for(i=0;i<8;i++){
-      SMB_DATA_OUT = 0x00;
-      TARGET = 0x70;
-      SMB_Write();
+   for(i=0;i<50;i++){
+      for(j=0;j<255;j++){
+         uartTx(i);
+      }
+   }
+   SHDN = 0;
+   LED = 0;
+ 
+   for(i=0;i<50;i++){
+      for(j=0;j<255;j++){
+         uartTx(i);
+      }
+   } 
 
-   
-      SMB_DATA_OUT = ~(1 << i);
-      TARGET = 0x7E;
-      SMB_Write();
+   LED = 1;
+   disp_on = 1;
+   while(1){    
     
-  
-      SMB_DATA_OUT = (1 << i);
-      TARGET = 0x70;
-      SMB_Write();
-
+      //smbWrite(DISP_SINK_0,    0x00);           
+      //smbWrite(DISP_SRC_0,     (0xFF7F >> row));
+      //driver(); 
+      //for(k=0;k<1000;k++){
+      //   uartTx(k);
+      //}
+      //for(i=0;i<8;i++){
+      //   for(j=0;j<8;j++){
+      //      disp((0x8000 >> i),~(0x80000000 >> j));
+      //      for(k=0;k<100;k++){
+      //         uartTx(k);
+      //      }
+      //   }
    
-   for(j=0;j<1000000;j++);
+      //   for(j=0;j<8;j++){
+      //      disp((0x0080 >> i),~(0x80000000 >> j));
+      //      for(k=0;k<100;k++){
+      //         uartTx(k);
+      //      }
+      //   }
+      //} 
+      //disp(0x8000,~0x80000000);
+      //for(k=0;k<500;k++){uartTx(k);}                                         
+   
+      //disp(0x8000,~0x40000000);
+      //for(k=0;k<500;k++){uartTx(k);}                                         
+   
+      //disp(0x4000,~0x80000000);
+      //for(k=0;k<500;k++){uartTx(k);}                                         
+   
+      //disp(0x4000,~0x40000000);
+      //for(k=0;k<500;k++){uartTx(k);}                                         
+   
+   }
       
-   
-   }
-      break; 
-     
-   }
-    
-   while(1);
-
-   //while(1){    
-   //   /*#ifdef COMPARE
-   //   for(i=0;i<N;i++){
-   //      s[i].re = uartRx() - 128;
-   //      s[i].im = 0;
-   //   }
-   //   fft(s);
-   //   for(i=0;i<N;i++){
-   //      uartTx(mag(&s[i]));        
-   //   } 
-   //   #endif
+      
+      //#ifdef COMPARE
+      //for(i=0;i<N;i++){
+      //   s[i].re = uartRx() - 128;
+      //   s[i].im = 0;
+      //}
+      //fft(s);
+      //for(i=0;i<N;i++){
+      //   uartTx(mag(&s[i]));        
+      //} 
+      //#endif
 
 
-   //   #ifndef COMPARE
-   //   while(s_ptr != N); 
-   //   // Sync byte    
-   //   uartTx((unsigned char)255);
-   //   // FFT it
-   //   LED0 = 1;
-   //   fft(s); 
-   //   LED0 = 0;
-   //   for(i=0;i<N_2;i++){
-   //      uartTx(mag(&s[i]));        
-   //   }                          
-   //   // Start new sample
-   //   s_ptr = 0; 
-   //   #endif
-   //   */
-   //}
-} 
-
-void SMB_Write (void)
-{
-   while(SMB_BUSY);                    // Wait for SMBus to be free.
-   SMB_BUSY = 1;                       // Claim SMBus (set to busy) 
-   SMB0CN_STA = 1;                            // Start transfer
+      //#ifndef COMPARE
+      //while(s_ptr != N); 
+      //// Sync byte    
+      //uartTx((unsigned char)255);
+      //// FFT it
+      //LED0 = 1;
+      //fft(s); 
+      //LED0 = 0;
+      //for(i=0;i<N_2;i++){
+      //   uartTx(mag(&s[i]));        
+      //}                          
+      //// Start new sample
+      //s_ptr = 0; 
+      //#endif
 }
+ 
 
 //-----------------------------------------------------------------------------
 // Interrupts
@@ -210,80 +271,208 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
          tx_tail_wrap++;
          tx_tail_wrap %= 2;
       } 
-   }   
+   } 
    TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
- 
-   LED1 = (LED1) ? 0 : 1;
+   U8 sinku;
+   U8 sinkl;
+
+   EIE1 &= ~EIE1_ET3__ENABLED;
+
+   LED = (LED) ? 0 : 1;
+
+   if(disp_on){
+
+      // Divide by 8
+      sinku = colu >> 3;
+      sinku = sink_lut[sinku];
+      sinkl = coll >> 3;
+      sinkl = sink_lut[sinkl];
+
+      switch(state){ 
+     
+         // Turn everything off
+         case 0:  smbWrite(DISP_SRC_0,    0xFF); 
+                  state = 1;
+                  break;
+         case 1:  smbWrite(DISP_SRC_1,    0xFF);
+                  state = 2;
+                  break;
+         case 2:  smbWrite(DISP_SINK_0,   0xFF);
+                  state = 3;
+                  break;
+         case 3:  smbWrite(DISP_SINK_1,   0xFF);
+                  state = 4;
+                  break;
+         case 4:  smbWrite(DISP_SINK_2,   0xFF);
+                  state = 5;
+                  break;
+         case 5:  smbWrite(DISP_SINK_3,   0xFF);
+                  state = 6;
+                  break;      
+                     
+         
+         case 6:  smbWrite(sinku,  (cols[colu] >> 8)); 
+                  state = 7; 
+                  break;
+         case 7:  smbWrite(sinkl,  (cols[coll])); 
+                  state = 8; 
+                  break;
+         case 8:  smbWrite(DISP_SRC_1,    (0xFF7F >> (colu % 8)));
+                  state = 9;
+                  break;
+         case 9:  smbWrite(DISP_SRC_0,    (0xFF7F >> (coll % 8)));
+                  state = 10;
+                  break;
+         case 10: smbWrite(sinku,  0xFF);
+                  colu++;
+                  colu %= 32;
+                  state = 11;
+                  break;
+         case 11: smbWrite(sinkl,  0xFF);
+                  state = 6;
+                  coll++;
+                  coll %= 32;
+                  break; 
+      }
+      
+   }
 
    // ADC Sample
-   if(s_ptr < N){ 
-      ADC0CN0 |= ADC0CN0_ADBUSY__SET;
-      while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
-      
-      // Places bias at 1V
-      s[s_ptr].re = (ADC0 >> 1) - 155;
-      s_ptr++;
-   } 
+   //if(s_ptr < N){ 
+   //   ADC0CN0 |= ADC0CN0_ADBUSY__SET;
+   //   while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
+   //   
+   //   // Places bias at 1V
+   //   s[s_ptr].re = (ADC0 >> 1) - 155;
+   //   s_ptr++;
+   //} 
    
    TMR3CN &= ~TMR3CN_TF3H__SET;
-   
+   EIE1 |= EIE1_ET3__ENABLED;
+
+}
+
+INTERRUPT(SMBUS0_ISR, SMBUS0_IRQn){ 
+   static U8 ADDR_SEND = 0;   // Used by the ISR to flag byte transmissions as slave addresses
+   //if(SMB0CN_ARBLOST == 0){ 
+      switch (SMB0CN & 0xF0) {
+         // Master Transmitter/Receiver: START condition transmitted.
+         case SMB_MTSTA:   SMB0DAT = smb_target;            // Load address of the target slave 
+                           SMB0CN_STA = 0;                  // Manually clear START bit
+                           ADDR_SEND = 1;
+                           break;
+         // Master Transmitter: Data byte transmitted only writes
+         case SMB_MTDB:    if(SMB0CN_ACK) {
+                              if (ADDR_SEND) {              // address,
+                                 ADDR_SEND = 0;             // Next byte is not a slave address
+                                 SMB0DAT = smb_data_out;
+                              }else{                        // address,
+                                 SMB0CN_STO = 1;            // Set SMB0CN_STO to terminate transfer
+                                 smb_busy = 0;              // And free SMBus interface
+                              }
+                           
+                           } else {
+                              SMB0CN_STO = 1;               // Send STOP condition,followed
+                              SMB0CN_STA = 1;               // By a START 
+                           }
+                           break;
+         default:          break;
+
+      } 
+   //}
+   SMB0CN_SI = 0; //Clear interrupt flag 
+}
+
+//-----------------------------------------------------------------------------
+// Display 
+//-----------------------------------------------------------------------------
+
+U8 rev(U8 b){
+   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+   return b;
 }
 
 
-INTERRUPT(SMBUS0_ISR, SMBUS0_IRQn)
-{ 
-   static U8 ADDR_SEND = 0;           // Used by the ISR to flag byte
-                                       // transmissions as slave addresses
 
-   if(SMB0CN_ARBLOST == 0)                    // Check for errors
-   {
-      // Normal operation
-      switch (SMB0CN & 0xF0)           // Status vector
-      {
-         // Master Transmitter/Receiver: START condition transmitted.
-         case SMB_MTSTA:
-            SMB0DAT = TARGET;          // Load address of the target slave 
-            SMB0CN_STA = 0;                   // Manually clear START bit
-            ADDR_SEND = 1;
-            break;
+// Display
+// .  .  .  ... . . . 15 
+// .  .  .  ... . . . 14
+// .  .  .  ... . . . 13 
+// .  .  .  ... . . . .
+// .  .  .  ... . . . 2 
+// .  .  .  ... . . . 1 
+// .  .  .  ... . . . 0 
+// 31 30 29 ... 2 1 0  
 
-         // Master Transmitter: Data byte transmitted
-         case SMB_MTDB:
-            if(SMB0CN_ACK)                    // Slave SMB0CN_ACK?
-            {
-               if (ADDR_SEND)          // If the previous byte was a slave
-               {                       // address,
-                  ADDR_SEND = 0;       // Next byte is not a slave address
-                  if(SMB_RW == WRITE)  // If this transfer is a WRITE,
-                  {
-                     // send data byte
-                     SMB0DAT = SMB_DATA_OUT;
-                  }
-               }
-               else                    // If previous byte was not a slave
-               {                       // address,
-                  SMB0CN_STO = 1;             // Set SMB0CN_STO to terminate transfer
-                  SMB_BUSY = 0;        // And free SMBus interface
-               }
-            }
-            else                       // If slave NACK,
-            {
-               SMB0CN_STO = 1;                // Send STOP condition, followed
-               SMB0CN_STA = 1;                // By a START 
-            }
-            break;
-         
-         default:
-            break;
+void disp (U16 src, U32 sink){ 
+   U8 src_0, src_1;
+   U8 sink_0, sink_1, sink_2, sink_3;
 
-      } // end switch
+   // Reorder bits to map to LEDs 
+   src_1 = src; 
+   src_1 = ~src_1;
+
+   src_0 = src >> 8; 
+   src_0 = ~src_0;
+
+   sink_3 = sink;
+   sink_2 = sink >> 8;
+   sink_1 = sink >> 16;
+   sink_0 = sink >> 24;
+   
+   smbWrite(DISP_SRC_0,    src_0);
+   smbWrite(DISP_SRC_1,    src_1);
+   smbWrite(DISP_SINK_0,   sink_0);
+   smbWrite(DISP_SINK_1,   sink_1);
+   smbWrite(DISP_SINK_2,   sink_2);
+   smbWrite(DISP_SINK_3,   sink_3);
+}
+
+void driver(void){
+   U16 k;
+   U8  i;
+   // Everything off
+   smbWrite(DISP_SINK_0,    0x00);
+   smbWrite(DISP_SINK_1,    0x00);
+   smbWrite(DISP_SINK_2,    0x00);
+   smbWrite(DISP_SINK_3,    0x00);
+   
+   // Sweep bottom bank
+   for(i=0;i<8;i++){
+      smbWrite(DISP_SRC_0, (0xFFFF << i));
+      for(k=0;k<100;k++){
+         uartTx(k);
+      }
+      smbWrite(DISP_SRC_0, (0xFFFE << i));
+   }
+
+   // Sweep top bank
+   for(i=0;i<8;i++){
+      smbWrite(DISP_SRC_1, (0xFEFF << i));    
+      for(k=0;k<100;k++){
+         uartTx(k);
+      }  
+   
    }
 
 
-   SMB0CN_SI = 0;                             // Clear interrupt flag
+}
+
+//-----------------------------------------------------------------------------
+// SMB 
+//-----------------------------------------------------------------------------
+
+void smbWrite (U8 addr, U8 data){
+   while(smb_busy);
+   smb_data_out = data;
+   smb_target = addr; 
+   smb_busy = 1;                       // Claim SMBus (set to busy)  
+   SMB0CN_STA = 1;                     // Start transfer 
 }
 
 //-----------------------------------------------------------------------------
@@ -406,7 +595,7 @@ void setup(void){
               P1SKIP_B1__SKIPPED;
    P1MDOUT  = P1MDOUT_B0__PUSH_PULL|            // LED            
               P1MDOUT_B1__PUSH_PULL;            // LED 
-   XBR0     = XBR0_SMB0E__ENABLED|
+   XBR0     = XBR0_SMB0E__ENABLED| 
               XBR0_URT0E__ENABLED;              // Route out UART P0.4 
    XBR2     = XBR2_WEAKPUD__PULL_UPS_DISABLED | 
               XBR2_XBARE__ENABLED;					  
@@ -415,29 +604,33 @@ void setup(void){
               CKCON_SCA__SYSCLK_DIV_12;  
    // SMBus
    SMB0CF   = SMB0CF_INH__SLAVE_DISABLED|
-              SMB0CF_SMBCS__TIMER1|
-              SMB0CF_ENSMB__ENABLED;
-   // Setup 115200 Baud UART 
-   // BAUD gen on timer 1
-	CKCON    |= CKCON_SCA__SYSCLK_DIV_48|
-               CKCON_T1M__PRESCALE;	
-   TMOD     |= TMOD_T1M__MODE2;
-	TCON     |= TCON_TR1__RUN; 
-   TH1      = 0x00;                             // Magic values from datasheet
-	TL1      = 0x00;
+              SMB0CF_SMBCS__TIMER0|
+              SMB0CF_SMBFTE__FREE_TO_ENABLED| 
+              SMB0CF_ENSMB__ENABLED; 
+   // I2C clock on timer 0
+   // BAUD gen 115200 on timer 1
+	CKCON    |= CKCON_T1M__SYSCLK;
+	TMOD     |= TMOD_T0M__MODE2 |
+               TMOD_T1M__MODE2;
+	TCON     |= TCON_TR0__RUN |
+               TCON_TR1__RUN; 
+   TH0      = 0xFE;  // I2C SCL - 333KHz
+   TL0      = 0x00;
+   TH1      = 0x96;  // Magic values from datasheet for 115200
+	TL1      = 0x96;
    // UART
 	SCON0    |= SCON0_REN__RECEIVE_ENABLED; 
    // Timer 2
 	TMR2CN   = TMR2CN_TR2__RUN;  
-   TMR2L    = 0xB0;
+   TMR2L    = 0x00;
    TMR2H    = 0xFF;
-   TMR2RLL  = 0xB0;
+   TMR2RLL  = 0x00;
    TMR2RLH  = 0xFF;
    // Timer 3
 	TMR3CN   = TMR3CN_TR3__RUN;   // ~44 KHz
-   TMR3L    = 0xD0;
+   TMR3L    = 0x0F;
    TMR3H    = 0xFF;
-   TMR3RLL  = 0xD0;
+   TMR3RLL  = 0x0F;
    TMR3RLH  = 0xFF;
    // ADC
    ADC0MX   = ADC0MX_ADC0MX__ADC0P3;
@@ -448,12 +641,12 @@ void setup(void){
    ADC0CN0 |= ADC0CN0_ADEN__ENABLED |
               ADC0CN0_ADCM__ADBUSY; 
    // Interrupts
-	IE   = IE_EA__ENABLED ; 
-		    //IE_ET0__ENABLED|
-          //IE_ET1__ENABLED|
-          //IE_ET2__ENABLED;
-   EIE1 = EIE1_ESMB0__ENABLED;// |
-          //EIE1_ET3__ENABLED;
+	IE   = IE_EA__ENABLED | 
+		    IE_ET0__ENABLED|
+          IE_ET1__ENABLED|
+          IE_ET2__ENABLED;
+   EIE1 = EIE1_ESMB0__ENABLED|
+          EIE1_ET3__ENABLED;
    IP   = IP_PT2__HIGH;    
 }
 
