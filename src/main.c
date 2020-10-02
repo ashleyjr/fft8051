@@ -47,38 +47,38 @@ static const U8 sink_lut[4] = {
 };
 
 static const U16 cols[32] = {
-   0b1010101010101010, 
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010,
-   0b1010101010101010
+0b1111111111111111,
+0b1111111111111111,
+0b1111111111111001,
+0b1111111111111001,
+0b1111100000000001,
+0b1111100000000001,
+0b1111111111111001,
+0b1111111111111001,
+0b1111111001111111,
+0b1111110000110011,
+0b1111100000010011,
+0b1111100110011001,
+0b1111100110011001,
+0b1111100111000011,
+0b1111110111100011,
+0b1111111111111111,
+0b1111111111111111,
+0b1111100110011001,
+0b1111100110011001,
+0b1111100110011001,
+0b1111100110011001,
+0b1111100110011001,
+0b1111100000000001,
+0b1111100000000001,
+0b1111111111111111,
+0b1111111111111111,
+0b1111111111111001,
+0b1111111111111001,
+0b1111100000000001,
+0b1111100000000001,
+0b1111111111111001,
+0b1111111111111001
 };
 
 //-----------------------------------------------------------------------------
@@ -148,8 +148,8 @@ void main (void){
    
    // Driver state machine
    disp_on = 0;
-   colu = 16;
-   coll = 0;
+   colu = 0;
+   coll = 16;
    state = 0;
 
    uartInit();     
@@ -278,6 +278,7 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
    U8 sinku;
    U8 sinkl;
+   U8 data;
 
    EIE1 &= ~EIE1_ET3__ENABLED;
 
@@ -286,9 +287,9 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
    if(disp_on){
 
       // Divide by 8
-      sinku = colu >> 3;
+      sinku = colu / 8;
       sinku = sink_lut[sinku];
-      sinkl = coll >> 3;
+      sinkl = coll / 8;
       sinkl = sink_lut[sinkl];
 
       switch(state){ 
@@ -314,28 +315,40 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
                   break;      
                      
          
-         case 6:  smbWrite(sinku,  (cols[colu] >> 8)); 
-                  state = 7; 
+         case 6:  data = cols[colu];
+                  smbWrite(sinku, data); 
+                  state++; 
                   break;
-         case 7:  smbWrite(sinkl,  (cols[coll])); 
-                  state = 8; 
+         case 7:
+         case 8:  data = (0xFF7F >> (colu % 8));
+                  smbWrite(DISP_SRC_1, data);
+                  state++;
                   break;
-         case 8:  smbWrite(DISP_SRC_1,    (0xFF7F >> (colu % 8)));
-                  state = 9;
+         case 9:  smbWrite(sinku,  0xFF); 
+                  state++;
                   break;
-         case 9:  smbWrite(DISP_SRC_0,    (0xFF7F >> (coll % 8)));
-                  state = 10;
-                  break;
-         case 10: smbWrite(sinku,  0xFF);
+         case 10: smbWrite(DISP_SRC_1,  0xFF);
                   colu++;
                   colu %= 32;
-                  state = 11;
+                  state++;
                   break;
-         case 11: smbWrite(sinkl,  0xFF);
-                  state = 6;
+         case 11: data = cols[coll] >> 8;
+                  smbWrite(sinkl, data); 
+                  state++; 
+                  break;
+         case 12: 
+         case 13: data = (0xFF7F >> (coll % 8));
+                  smbWrite(DISP_SRC_0, data);
+                  state++;
+                  break;
+         case 14: smbWrite(sinkl,  0xFF); 
+                  state++;
+                  break;
+         case 15: smbWrite(DISP_SRC_0,  0xFF);
                   coll++;
                   coll %= 32;
-                  break; 
+                  state = 6;
+                  break;
       }
       
    }
@@ -614,7 +627,7 @@ void setup(void){
                TMOD_T1M__MODE2;
 	TCON     |= TCON_TR0__RUN |
                TCON_TR1__RUN; 
-   TH0      = 0xFE;  // I2C SCL - 333KHz
+   TH0      = 0xFE;  // I2C SCL - 333KHz (above 100KHz max for drivers datasheet)
    TL0      = 0x00;
    TH1      = 0x96;  // Magic values from datasheet for 115200
 	TL1      = 0x96;
@@ -628,9 +641,9 @@ void setup(void){
    TMR2RLH  = 0xFF;
    // Timer 3
 	TMR3CN   = TMR3CN_TR3__RUN;   // ~44 KHz
-   TMR3L    = 0x0F;
+   TMR3L    = 0x50;
    TMR3H    = 0xFF;
-   TMR3RLL  = 0x0F;
+   TMR3RLL  = 0x50;
    TMR3RLH  = 0xFF;
    // ADC
    ADC0MX   = ADC0MX_ADC0MX__ADC0P3;
