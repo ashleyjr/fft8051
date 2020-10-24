@@ -46,6 +46,8 @@ for i in range(N):
 fft_uart = []
 for i in range(N):
     r = u.rx()
+    print r
+    print i
     fft_uart.append(r)
 u.finish()
 

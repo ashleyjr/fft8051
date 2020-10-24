@@ -4,15 +4,14 @@
 
 #include "SI_C8051F850_Register_Enums.h"
 #include "SI_C8051F850_Defs.h"
-//#include "fft8051.h"
+#include "fft8051.h"
 #include "disp.h"
 
 //-----------------------------------------------------------------------------
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_RX 20
-#define UART_SIZE_TX 5
+#define UART_SIZE_TX 1
 #define DISP_SRC_0   0x70
 #define DISP_SRC_1   0x74
 #define DISP_SINK_0  0x7E
@@ -46,12 +45,6 @@ void  setup(void);
 void  smbWrite(U8 addr, U8 data);
 void  uartInit(void);
 void  uartTx(U8 tx);
-U8    uartRx(void);
-U8    uartRxPtr(void);
-U8    uartRxWrap(void);
-U8    uartRxWrapN(void);
-U8    uartRxEmpty(void);
-U8    uartRxFull(void);
 U8    uartTxPtr(void);
 U8    uartTxWrap(void);
 U8    uartTxWrapN(void);
@@ -68,14 +61,8 @@ volatile U8 tx_tail;
 volatile U8 tx_head_wrap;
 volatile U8 tx_tail_wrap;
 
-volatile U8 uart_rx[UART_SIZE_RX];
-volatile U8 rx_head;
-volatile U8 rx_tail;
-volatile U8 rx_head_wrap;
-volatile U8 rx_tail_wrap;
-
-//volatile static __xdata complex_t s[N]; 
-//volatile static unsigned char s_ptr;
+volatile static __xdata complex_t s[N]; 
+volatile static unsigned char s_ptr;
 
 volatile U8 smb_data_out;                       // Global holder for SMBus data.
 volatile U8 smb_target;                             // Target SMBus slave address
@@ -87,6 +74,8 @@ volatile U8 colu;
 volatile U8 coll;
 volatile U8 state;
 volatile U8 image;
+
+volatile U16 test[16];
 
 //-----------------------------------------------------------------------------
 // Main Routine
@@ -126,34 +115,45 @@ void main (void){
 
    LED = 1;
    disp_on = 1;
-   while(1);
-         
-   //#ifdef COMPARE
-   //for(i=0;i<N;i++){
-   //   s[i].re = uartRx() - 128;
-   //   s[i].im = 0;
-   //}
-   //fft(s);
-   //for(i=0;i<N;i++){
-   //   uartTx(mag(&s[i]));        
-   //} 
-   //#endif
+   while(1){ 
+      // RX a byte then go in to compare mode
+      // which tests the FFT algo
+      if(!SCON0_RI){
+         while(1){
+            SCON0_RI = 0;
+            s[0].re = SBUF0 - 128;
+            s[0].im = 0;
+            for(i=1;i<N;i++){
+               while(!SCON0_RI);
+               SCON0_RI = 0;
+               s[i].re = SBUF0 - 128;
+               s[i].im = 0;
+            }
+            fft(s);
+            for(i=0;i<16;i++){
+               test[i] = 0;
+            }
+            for(i=0;i<N;i++){
+               uartTx(mag(&s[i]));       
+               test[i >> 2] +=  mag(&s[i]);
+            }
+            for(i=0;i<16;i++){ 
+               if(test[i] > 150)       test[i] = 0b1111111111111111;
+               else if(test[i] > 80)  test[i] = 0b0000000111111111;
+               else                    test[i] = 0b0000000000000000;
 
+            }
+            image = 1;
+            while(!SCON0_RI);
+         } 
+      }
+      //#endif
 
-   //#ifndef COMPARE
-   //while(s_ptr != N); 
-   //// Sync byte    
-   //uartTx((unsigned char)255);
-   //// FFT it
-   //LED0 = 1;
-   //fft(s); 
-   //LED0 = 0;
-   //for(i=0;i<N_2;i++){
-   //   uartTx(mag(&s[i]));        
-   //}                          
-   //// Start new sample
-   //s_ptr = 0; 
-   //#endif
+ 
+      while(s_ptr != N); 
+      fft(s); 
+      s_ptr = 0;  
+   }
 }
  
 
@@ -161,23 +161,6 @@ void main (void){
 // Interrupts
 //-----------------------------------------------------------------------------
 
-INTERRUPT (TIMER1_ISR, TIMER1_IRQn){   
-   #ifdef COMPARE
-   // UART RX
-   if(SCON0_RI){ 
-      SCON0_RI = 0; 
-      if(!uartRxFull()){ 
-         uart_rx[rx_head] = SBUF0;
-         rx_head++;
-         if(rx_head == UART_SIZE_RX){
-            rx_head = 0;
-            rx_head_wrap++;
-            rx_head_wrap %= 2;
-         }
-      }
-   }
-   #endif
-}
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){           
    // UART TX
    if(!uartTxEmpty()){
@@ -196,19 +179,19 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
    U8 data;
 
    EIE1 &= ~EIE1_ET3__ENABLED;
-
-   LED = 1;//(LED) ? 0 : 1;
-
+   
    if(disp_on){
 
-      // Divide by 8
+      // Select image
       if(6 == state){
          switch(image){
-            case 0:  data = (U8)disp_0[colu];   break;
+            case 1:   data = (U8)test[colu >> 1];  break;
+            default:  data = (U8)disp_0[colu];     break;
          }
       }else{
          switch(image){
-            case 0:  data = (U8)(disp_0[coll] >> 8);  break;
+            case 1:   data = (U8)(test[coll >> 1] >> 8); break;
+            default:  data = (U8)(disp_0[coll] >> 8);    break;
          }
       }
 
@@ -242,14 +225,14 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
    }
 
    // ADC Sample
-   //if(s_ptr < N){ 
-   //   ADC0CN0 |= ADC0CN0_ADBUSY__SET;
-   //   while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
-   //   
-   //   // Places bias at 1V
-   //   s[s_ptr].re = (ADC0 >> 1) - 155;
-   //   s_ptr++;
-   //} 
+   if(s_ptr < N){ 
+      ADC0CN0 |= ADC0CN0_ADBUSY__SET;
+      while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
+      
+      // Places bias at 1V
+      s[s_ptr].re = (ADC0 >> 1) - 155;
+      s_ptr++;
+   } 
    
    TMR3CN &= ~TMR3CN_TF3H__SET;
    EIE1 |= EIE1_ET3__ENABLED;
@@ -307,10 +290,6 @@ void uartInit(void){
    tx_tail      = 0;
    tx_head_wrap = 0;
    tx_tail_wrap = 0;
-   rx_head      = 0;
-   rx_tail      = 0;
-   rx_head_wrap = 0;
-   rx_tail_wrap = 0;
 }
 
 void uartTx(U8 tx){
@@ -322,51 +301,6 @@ void uartTx(U8 tx){
       tx_head_wrap++;
       tx_head_wrap %= 2;
    }
-}
-
-U8 uartRx(void){
-   U8 rx;
-   while(uartRxEmpty());
-   rx = uart_rx[rx_tail];
-   rx_tail++;
-   if(rx_tail == UART_SIZE_RX){
-      rx_tail = 0;
-      rx_tail_wrap++;
-      rx_tail_wrap %= 2;
-   } 
-   return rx;
-}
-
-U8 uartRxPtr(void){
-   if(rx_tail == rx_head){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartRxWrap(void){
-   if(rx_tail_wrap == rx_head_wrap){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartRxWrapN(void){
-   if(rx_tail_wrap != rx_head_wrap){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartRxEmpty(void){   
-   return uartRxPtr() * uartRxWrap();
-}
-
-U8 uartRxFull(void){
-   return uartRxPtr() * uartRxWrapN(); 
 }
 
 U8 uartTxPtr(void){
@@ -444,7 +378,7 @@ void setup(void){
    // UART
 	SCON0    |= SCON0_REN__RECEIVE_ENABLED; 
    // Timer 2
-	TMR2CN   = TMR2CN_TR2__RUN;  
+	TMR2CN   = TMR2CN_TR2__RUN;   // ~10KHz 
    TMR2L    = 0x00;
    TMR2H    = 0xFF;
    TMR2RLL  = 0x00;
