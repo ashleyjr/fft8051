@@ -13,32 +13,23 @@
 
 #define UART_SIZE_RX 20
 #define UART_SIZE_TX 5
-
-#define DISP_SRC_0      0x70
-#define DISP_SRC_1      0x74
-#define DISP_SINK_0     0x7E
-#define DISP_SINK_1     0x7A
-#define DISP_SINK_2     0x76
-#define DISP_SINK_3     0x72
-
-#define  WRITE                    0x00 // SMBus WRITE command
-#define  READ                     0x01 // SMBus READ command
-
-// Device addresses (7 bits, LSB is a don't care)
-#define  SLAVE_ADDR               0xF0 // Device address for slave target
-
-// Status vector - top 4 bits only
-#define  SMB_MTSTA                0xE0 // (MT) start transmitted
-#define  SMB_MTDB                 0xC0 // (MT) data byte transmitted
-#define  SMB_MRDB                 0x80 // (MR) data byte received
-
+#define DISP_SRC_0   0x70
+#define DISP_SRC_1   0x74
+#define DISP_SINK_0  0x7E
+#define DISP_SINK_1  0x7A
+#define DISP_SINK_2  0x76
+#define DISP_SINK_3  0x72
+#define DISP_X       32
+#define DISP_Y       16
+#define SMB_MTSTA    0xE0 // (MT) start transmitted
+#define SMB_MTDB     0xC0 // (MT) data byte transmitted
+#define SMB_MRDB     0x80 // (MR) data byte received
 
 SBIT(SHDN, SFR_P1, 0);  
 SBIT(LED,  SFR_P1, 1);  
 SBIT(TIME, SFR_P0, 0);  
 SBIT(BUT0, SFR_P1, 7);  
 SBIT(BUT1, SFR_P2, 1);  
-
 
 static const U8 sink_lut[4] = {
    DISP_SINK_0,
@@ -52,12 +43,7 @@ static const U8 sink_lut[4] = {
 //-----------------------------------------------------------------------------
 
 void  setup(void);
-
-void  driver(void);
-void  disp (U16 src, U32 sink);
-
 void  smbWrite(U8 addr, U8 data);
-
 void  uartInit(void);
 void  uartTx(U8 tx);
 U8    uartRx(void);
@@ -139,70 +125,34 @@ void main (void){
 
    LED = 1;
    disp_on = 1;
-   while(1){    
-    
-      //smbWrite(DISP_SINK_0,    0x00);           
-      //smbWrite(DISP_SRC_0,     (0xFF7F >> row));
-      //driver(); 
-      //for(k=0;k<1000;k++){
-      //   uartTx(k);
-      //}
-      //for(i=0;i<8;i++){
-      //   for(j=0;j<8;j++){
-      //      disp((0x8000 >> i),~(0x80000000 >> j));
-      //      for(k=0;k<100;k++){
-      //         uartTx(k);
-      //      }
-      //   }
-   
-      //   for(j=0;j<8;j++){
-      //      disp((0x0080 >> i),~(0x80000000 >> j));
-      //      for(k=0;k<100;k++){
-      //         uartTx(k);
-      //      }
-      //   }
-      //} 
-      //disp(0x8000,~0x80000000);
-      //for(k=0;k<500;k++){uartTx(k);}                                         
-   
-      //disp(0x8000,~0x40000000);
-      //for(k=0;k<500;k++){uartTx(k);}                                         
-   
-      //disp(0x4000,~0x80000000);
-      //for(k=0;k<500;k++){uartTx(k);}                                         
-   
-      //disp(0x4000,~0x40000000);
-      //for(k=0;k<500;k++){uartTx(k);}                                         
-   
-   }
-      
-      
-      //#ifdef COMPARE
-      //for(i=0;i<N;i++){
-      //   s[i].re = uartRx() - 128;
-      //   s[i].im = 0;
-      //}
-      //fft(s);
-      //for(i=0;i<N;i++){
-      //   uartTx(mag(&s[i]));        
-      //} 
-      //#endif
+   while(1);
+         
+   //#ifdef COMPARE
+   //for(i=0;i<N;i++){
+   //   s[i].re = uartRx() - 128;
+   //   s[i].im = 0;
+   //}
+   //fft(s);
+   //for(i=0;i<N;i++){
+   //   uartTx(mag(&s[i]));        
+   //} 
+   //#endif
 
 
-      //#ifndef COMPARE
-      //while(s_ptr != N); 
-      //// Sync byte    
-      //uartTx((unsigned char)255);
-      //// FFT it
-      //LED0 = 1;
-      //fft(s); 
-      //LED0 = 0;
-      //for(i=0;i<N_2;i++){
-      //   uartTx(mag(&s[i]));        
-      //}                          
-      //// Start new sample
-      //s_ptr = 0; 
-      //#endif
+   //#ifndef COMPARE
+   //while(s_ptr != N); 
+   //// Sync byte    
+   //uartTx((unsigned char)255);
+   //// FFT it
+   //LED0 = 1;
+   //fft(s); 
+   //LED0 = 0;
+   //for(i=0;i<N_2;i++){
+   //   uartTx(mag(&s[i]));        
+   //}                          
+   //// Start new sample
+   //s_ptr = 0; 
+   //#endif
 }
  
 
@@ -244,22 +194,24 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
    U8 sinku;
    U8 sinkl;
-   U8 data;
+   U8 datau;
+   U8 datal;
 
    EIE1 &= ~EIE1_ET3__ENABLED;
 
-   LED = (LED) ? 0 : 1;
+   LED = 1;//(LED) ? 0 : 1;
 
    if(disp_on){
 
       // Divide by 8
-      sinku = colu / 8;
+      sinku = colu >> 3;
       sinku = sink_lut[sinku];
-      sinkl = coll / 8;
+      sinkl = coll >> 3;
       sinkl = sink_lut[sinkl];
-
+      datau = (U8)disp_fft[colu];
+      datal = (U8)(disp_fft[coll] >> 8);
+                           
       switch(state){ 
-     
          // Turn everything off
          case 0:  smbWrite(DISP_SRC_0,    0xFF); 
                   state = 1;
@@ -278,41 +230,34 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
                   break;
          case 5:  smbWrite(DISP_SINK_3,   0xFF);
                   state = 6;
-                  break;      
-                     
-         
-         case 6:  data = (U8)disp_fft[colu];
-                  smbWrite(sinku, data); 
+                  break;       
+         // Drive image 
+         case 6:  smbWrite(sinku, datau); 
                   state++; 
-                  break;
-         case 7:
-         case 8:  data = (0xFF7F >> (colu % 8));
-                  smbWrite(DISP_SRC_1, data);
+                  break; 
+         case 7:  smbWrite(DISP_SRC_1, (0xFF7F >> (colu % 8)));
                   state++;
                   break;
-         case 9:  smbWrite(sinku,  0xFF); 
+         case 8:  smbWrite(sinku,  0xFF); 
                   state++;
                   break;
-         case 10: smbWrite(DISP_SRC_1,  0xFF);
+         case 9:  smbWrite(DISP_SRC_1,  0xFF);
                   colu++;
-                  colu %= 32;
+                  colu %= DISP_X;
                   state++;
                   break;
-         case 11: data = (U8)(disp_fft[coll] >> 8);
-                  smbWrite(sinkl, data); 
+         case 10: smbWrite(sinkl, datal); 
                   state++; 
-                  break;
-         case 12: 
-         case 13: data = (0xFF7F >> (coll % 8));
-                  smbWrite(DISP_SRC_0, data);
+                  break; 
+         case 11: smbWrite(DISP_SRC_0, (0xFF7F >> (coll % 8)));
                   state++;
                   break;
-         case 14: smbWrite(sinkl,  0xFF); 
+         case 12: smbWrite(sinkl,  0xFF); 
                   state++;
                   break;
-         case 15: smbWrite(DISP_SRC_0,  0xFF);
+         case 13: smbWrite(DISP_SRC_0,  0xFF);
                   coll++;
-                  coll %= 32;
+                  coll %= DISP_X;
                   state = 6;
                   break;
       }
@@ -335,112 +280,34 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
 }
 
 INTERRUPT(SMBUS0_ISR, SMBUS0_IRQn){ 
-   static U8 ADDR_SEND = 0;   // Used by the ISR to flag byte transmissions as slave addresses
-   //if(SMB0CN_ARBLOST == 0){ 
-      switch (SMB0CN & 0xF0) {
-         // Master Transmitter/Receiver: START condition transmitted.
-         case SMB_MTSTA:   SMB0DAT = smb_target;            // Load address of the target slave 
-                           SMB0CN_STA = 0;                  // Manually clear START bit
-                           ADDR_SEND = 1;
-                           break;
-         // Master Transmitter: Data byte transmitted only writes
-         case SMB_MTDB:    if(SMB0CN_ACK) {
-                              if (ADDR_SEND) {              // address,
-                                 ADDR_SEND = 0;             // Next byte is not a slave address
-                                 SMB0DAT = smb_data_out;
-                              }else{                        // address,
-                                 SMB0CN_STO = 1;            // Set SMB0CN_STO to terminate transfer
-                                 smb_busy = 0;              // And free SMBus interface
-                              }
-                           
-                           } else {
-                              SMB0CN_STO = 1;               // Send STOP condition,followed
-                              SMB0CN_STA = 1;               // By a START 
+   static U8 ADDR_SEND = 0;   // Used by the ISR to flag byte transmissions as slave addresses 
+   switch (SMB0CN & 0xF0) {
+      // Master Transmitter/Receiver: START condition transmitted.
+      case SMB_MTSTA:   SMB0DAT = smb_target;            // Load address of the target slave 
+                        SMB0CN_STA = 0;                  // Manually clear START bit
+                        ADDR_SEND = 1;
+                        break;
+      // Master Transmitter: Data byte transmitted only writes
+      case SMB_MTDB:    if(SMB0CN_ACK) {
+                           if (ADDR_SEND) {              // address,
+                              ADDR_SEND = 0;             // Next byte is not a slave address
+                              SMB0DAT = smb_data_out;
+                           }else{                        // address,
+                              SMB0CN_STO = 1;            // Set SMB0CN_STO to terminate transfer
+                              smb_busy = 0;              // And free SMBus interface
                            }
-                           break;
-         default:          break;
+                        
+                        } else {
+                           SMB0CN_STO = 1;               // Send STOP condition,followed
+                           SMB0CN_STA = 1;               // By a START 
+                        }
+                        break;
+      default:          break;
 
-      } 
-   //}
+   }  
    SMB0CN_SI = 0; //Clear interrupt flag 
 }
 
-//-----------------------------------------------------------------------------
-// Display 
-//-----------------------------------------------------------------------------
-
-U8 rev(U8 b){
-   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
-   return b;
-}
-
-
-
-// Display
-// .  .  .  ... . . . 15 
-// .  .  .  ... . . . 14
-// .  .  .  ... . . . 13 
-// .  .  .  ... . . . .
-// .  .  .  ... . . . 2 
-// .  .  .  ... . . . 1 
-// .  .  .  ... . . . 0 
-// 31 30 29 ... 2 1 0  
-
-void disp (U16 src, U32 sink){ 
-   U8 src_0, src_1;
-   U8 sink_0, sink_1, sink_2, sink_3;
-
-   // Reorder bits to map to LEDs 
-   src_1 = src; 
-   src_1 = ~src_1;
-
-   src_0 = src >> 8; 
-   src_0 = ~src_0;
-
-   sink_3 = sink;
-   sink_2 = sink >> 8;
-   sink_1 = sink >> 16;
-   sink_0 = sink >> 24;
-   
-   smbWrite(DISP_SRC_0,    src_0);
-   smbWrite(DISP_SRC_1,    src_1);
-   smbWrite(DISP_SINK_0,   sink_0);
-   smbWrite(DISP_SINK_1,   sink_1);
-   smbWrite(DISP_SINK_2,   sink_2);
-   smbWrite(DISP_SINK_3,   sink_3);
-}
-
-void driver(void){
-   U16 k;
-   U8  i;
-   // Everything off
-   smbWrite(DISP_SINK_0,    0x00);
-   smbWrite(DISP_SINK_1,    0x00);
-   smbWrite(DISP_SINK_2,    0x00);
-   smbWrite(DISP_SINK_3,    0x00);
-   
-   // Sweep bottom bank
-   for(i=0;i<8;i++){
-      smbWrite(DISP_SRC_0, (0xFFFF << i));
-      for(k=0;k<100;k++){
-         uartTx(k);
-      }
-      smbWrite(DISP_SRC_0, (0xFFFE << i));
-   }
-
-   // Sweep top bank
-   for(i=0;i<8;i++){
-      smbWrite(DISP_SRC_1, (0xFEFF << i));    
-      for(k=0;k<100;k++){
-         uartTx(k);
-      }  
-   
-   }
-
-
-}
 
 //-----------------------------------------------------------------------------
 // SMB 
@@ -450,8 +317,8 @@ void smbWrite (U8 addr, U8 data){
    while(smb_busy);
    smb_data_out = data;
    smb_target = addr; 
-   smb_busy = 1;                       // Claim SMBus (set to busy)  
-   SMB0CN_STA = 1;                     // Start transfer 
+   smb_busy = 1;           // Claim SMBus (set to busy)  
+   SMB0CN_STA = 1;         // Start transfer 
 }
 
 //-----------------------------------------------------------------------------
