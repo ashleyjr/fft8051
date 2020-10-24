@@ -86,6 +86,7 @@ volatile U8 disp_on;
 volatile U8 colu;
 volatile U8 coll;
 volatile U8 state;
+volatile U8 image;
 
 //-----------------------------------------------------------------------------
 // Main Routine
@@ -103,7 +104,7 @@ void main (void){
    colu = 0;
    coll = 16;
    state = 0;
-
+   image = 0;
    uartInit();     
    setup();
  
@@ -191,11 +192,8 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
    TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
-INTERRUPT (TIMER3_ISR, TIMER3_IRQn){          
-   U8 sinku;
-   U8 sinkl;
-   U8 datau;
-   U8 datal;
+INTERRUPT (TIMER3_ISR, TIMER3_IRQn){           
+   U8 data;
 
    EIE1 &= ~EIE1_ET3__ENABLED;
 
@@ -204,63 +202,42 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
    if(disp_on){
 
       // Divide by 8
-      sinku = colu >> 3;
-      sinku = sink_lut[sinku];
-      sinkl = coll >> 3;
-      sinkl = sink_lut[sinkl];
-      datau = (U8)disp_fft[colu];
-      datal = (U8)(disp_fft[coll] >> 8);
-                           
+      if(6 == state){
+         switch(image){
+            case 0:  data = (U8)disp_0[colu];   break;
+         }
+      }else{
+         switch(image){
+            case 0:  data = (U8)(disp_0[coll] >> 8);  break;
+         }
+      }
+
       switch(state){ 
          // Turn everything off
-         case 0:  smbWrite(DISP_SRC_0,    0xFF); 
-                  state = 1;
-                  break;
-         case 1:  smbWrite(DISP_SRC_1,    0xFF);
-                  state = 2;
-                  break;
-         case 2:  smbWrite(DISP_SINK_0,   0xFF);
-                  state = 3;
-                  break;
-         case 3:  smbWrite(DISP_SINK_1,   0xFF);
-                  state = 4;
-                  break;
-         case 4:  smbWrite(DISP_SINK_2,   0xFF);
-                  state = 5;
-                  break;
-         case 5:  smbWrite(DISP_SINK_3,   0xFF);
-                  state = 6;
-                  break;       
+         case 0:  smbWrite(DISP_SRC_0,    0xFF);   break;
+         case 1:  smbWrite(DISP_SRC_1,    0xFF);   break;
+         case 2:  smbWrite(DISP_SINK_0,   0xFF);   break;
+         case 3:  smbWrite(DISP_SINK_1,   0xFF);   break;
+         case 4:  smbWrite(DISP_SINK_2,   0xFF);   break;
+         case 5:  smbWrite(DISP_SINK_3,   0xFF);   break;       
          // Drive image 
-         case 6:  smbWrite(sinku, datau); 
-                  state++; 
-                  break; 
-         case 7:  smbWrite(DISP_SRC_1, (0xFF7F >> (colu % 8)));
-                  state++;
-                  break;
-         case 8:  smbWrite(sinku,  0xFF); 
-                  state++;
-                  break;
+         case 6:  smbWrite(sink_lut[colu >> 3], data);            break; 
+         case 7:  smbWrite(DISP_SRC_1, (0xFF7F >> (colu % 8)));   break;
+         case 8:  smbWrite(sink_lut[colu >> 3],  0xFF);           break;
          case 9:  smbWrite(DISP_SRC_1,  0xFF);
                   colu++;
                   colu %= DISP_X;
-                  state++;
                   break;
-         case 10: smbWrite(sinkl, datal); 
-                  state++; 
-                  break; 
-         case 11: smbWrite(DISP_SRC_0, (0xFF7F >> (coll % 8)));
-                  state++;
-                  break;
-         case 12: smbWrite(sinkl,  0xFF); 
-                  state++;
-                  break;
+         case 10: smbWrite(sink_lut[coll >> 3], data);            break; 
+         case 11: smbWrite(DISP_SRC_0, (0xFF7F >> (coll % 8)));   break;
+         case 12: smbWrite(sink_lut[coll >> 3],  0xFF);           break;
          case 13: smbWrite(DISP_SRC_0,  0xFF);
                   coll++;
                   coll %= DISP_X;
-                  state = 6;
+                  state = 5;
                   break;
       }
+      state++;
       
    }
 
