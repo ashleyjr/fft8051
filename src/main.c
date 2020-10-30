@@ -115,6 +115,7 @@ void main (void){
 
    LED = 1;
    disp_on = 1;
+
    while(1){ 
       // RX a byte then go in to compare mode
       // which tests the FFT algo
@@ -134,25 +135,24 @@ void main (void){
                test[i] = 0;
             }
             for(i=0;i<N;i++){
-               uartTx(mag(&s[i]));       
-               test[i >> 2] +=  mag(&s[i]);
+               uartTx(mag(&s[i])); 
+               test[i>>2] += mag(&s[N-i-1]);
             }
-            for(i=0;i<16;i++){ 
-               if(test[i] > 150)       test[i] = 0b1111111111111111;
-               else if(test[i] > 80)  test[i] = 0b0000000111111111;
-               else                    test[i] = 0b0000000000000000;
-
+            for(i=0;i<16;i++){
+               test[i] = (0x0000FFFF >> (test[i]/4));
             }
             image = 1;
             while(!SCON0_RI);
          } 
-      }
+      } 
+
+
       //#endif
 
  
-      while(s_ptr != N); 
-      fft(s); 
-      s_ptr = 0;  
+      //while(s_ptr != N); 
+      //fft(s); 
+      //s_ptr = 0;  
    }
 }
  
@@ -176,21 +176,22 @@ INTERRUPT (TIMER2_ISR, TIMER2_IRQn){
 }
 
 INTERRUPT (TIMER3_ISR, TIMER3_IRQn){           
-   U8 data;
+   U8 data; 
 
    EIE1 &= ~EIE1_ET3__ENABLED;
    
    if(disp_on){
 
+
       // Select image
       if(6 == state){
          switch(image){
-            case 1:   data = (U8)test[colu >> 1];  break;
+            case 1:   data = (U8)test[colu >> 2];  break;
             default:  data = (U8)disp_0[colu];     break;
          }
       }else{
          switch(image){
-            case 1:   data = (U8)(test[coll >> 1] >> 8); break;
+            case 1:   data = (U8)(test[coll >> 2] >> 8);        break;
             default:  data = (U8)(disp_0[coll] >> 8);    break;
          }
       }
