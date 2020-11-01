@@ -75,7 +75,7 @@ volatile U8 coll;
 volatile U8 state;
 volatile U8 image;
 
-volatile U16 test[16];
+volatile U8 chart[N_2];
 
 //-----------------------------------------------------------------------------
 // Main Routine
@@ -130,16 +130,14 @@ void main (void){
                s[i].re = SBUF0 - 128;
                s[i].im = 0;
             }
-            fft(s);
-            for(i=0;i<16;i++){
-               test[i] = 0;
-            }
+            fft(s); 
+            // TX Uart
             for(i=0;i<N;i++){
                uartTx(mag(&s[i])); 
-               test[i>>2] += mag(&s[N-i-1]);
             }
-            for(i=0;i<16;i++){
-               test[i] = (0x0000FFFF >> (test[i]/4));
+            // Scale to fit on display
+            for(i=0;i<N_2;i++){
+               chart[i] = mag(&s[N_2-1-i]) >> 2;
             }
             image = 1;
             while(!SCON0_RI);
@@ -186,13 +184,13 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
       // Select image
       if(6 == state){
          switch(image){
-            case 1:   data = (U8)test[colu >> 2];  break;
-            default:  data = (U8)disp_0[colu];     break;
+            case 1:   data = (U8)(0x0000FFFF >> (chart[colu]));   break;
+            default:  data = (U8)disp_0[colu];                    break;
          }
       }else{
          switch(image){
-            case 1:   data = (U8)(test[coll >> 2] >> 8);        break;
-            default:  data = (U8)(disp_0[coll] >> 8);    break;
+            case 1:   data = (U8)(0x0000FFFF >> (chart[coll]+8)); break;
+            default:  data = (U8)(disp_0[coll] >> 8);             break;
          }
       }
 
