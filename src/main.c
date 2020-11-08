@@ -11,7 +11,6 @@
 // Defines
 //-----------------------------------------------------------------------------
 
-#define UART_SIZE_TX 1
 #define DISP_SRC_0   0x70
 #define DISP_SRC_1   0x74
 #define DISP_SINK_0  0x7E
@@ -43,23 +42,12 @@ static const U8 sink_lut[4] = {
 
 void  setup(void);
 void  smbWrite(U8 addr, U8 data);
-void  uartInit(void);
+U8    uartRx(void);
 void  uartTx(U8 tx);
-U8    uartTxPtr(void);
-U8    uartTxWrap(void);
-U8    uartTxWrapN(void);
-U8    uartTxEmpty(void);
-U8    uartTxFull(void);
 
 //-----------------------------------------------------------------------------
 // Global Variables
 //-----------------------------------------------------------------------------
-
-volatile U8 uart_tx[UART_SIZE_TX];
-volatile U8 tx_head;
-volatile U8 tx_tail;
-volatile U8 tx_head_wrap;
-volatile U8 tx_tail_wrap;
 
 volatile static __xdata complex_t s[N]; 
 volatile static unsigned char s_ptr;
@@ -93,8 +81,7 @@ void main (void){
    colu = 0;
    coll = 16;
    state = 0;
-   image = 0;
-   uartInit();     
+   image = 0; 
    setup();
  
    i = 0;
@@ -122,9 +109,7 @@ void main (void){
       if(SCON0_RI){
          while(1){
             for(i=0;i<N;i++){
-               while(!SCON0_RI);
-               SCON0_RI = 0;
-               s[i].re = SBUF0 - 128;
+               s[i].re = uartRx() - 128;
                s[i].im = 0;
             }
             fft(s); 
@@ -158,16 +143,7 @@ void main (void){
 //-----------------------------------------------------------------------------
 
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){           
-   // UART TX
-   if(!uartTxEmpty()){
-      SBUF0 = uart_tx[tx_tail]; 
-      tx_tail++;                 
-      if(tx_tail == UART_SIZE_TX){
-         tx_tail = 0; 
-         tx_tail_wrap++;
-         tx_tail_wrap %= 2;
-      } 
-   } 
+   
    TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
@@ -282,54 +258,16 @@ void smbWrite (U8 addr, U8 data){
 // UART
 //-----------------------------------------------------------------------------
 
-void uartInit(void){
-   tx_head      = 0;
-   tx_tail      = 0;
-   tx_head_wrap = 0;
-   tx_tail_wrap = 0;
+U8 uartRx(void){
+   while(!SCON0_RI);
+   SCON0_RI = 0;
+   return SBUF0;
 }
 
 void uartTx(U8 tx){
-   while(uartTxFull());
-   uart_tx[tx_head] = tx;
-   tx_head++;
-   if(tx_head == UART_SIZE_TX){
-      tx_head = 0;
-      tx_head_wrap++;
-      tx_head_wrap %= 2;
-   }
-}
-
-U8 uartTxPtr(void){
-   if(tx_tail == tx_head){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartTxWrap(void){
-   if(tx_tail_wrap == tx_head_wrap){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartTxWrapN(void){
-   if(tx_tail_wrap != tx_head_wrap){
-      return 1;
-   }else{
-      return 0;
-   }
-}
-
-U8 uartTxEmpty(void){   
-   return uartTxPtr() * uartTxWrap();
-}
-
-U8 uartTxFull(void){
-   return uartTxPtr() * uartTxWrapN(); 
+   SCON0_TI = 0;
+   SBUF0 = tx;
+   while(!SCON0_TI); 
 }
 
 //-----------------------------------------------------------------------------
