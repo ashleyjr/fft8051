@@ -57,7 +57,6 @@ volatile U8 smb_target;                             // Target SMBus slave addres
 volatile U8 smb_busy;                 // Software flag to indicate when the
 volatile U8 SMB_RW;                   // Software flag to indicate the
 
-volatile U8 disp_on;
 volatile U8 colu;
 volatile U8 coll;
 volatile U8 state;
@@ -65,19 +64,20 @@ volatile U8 image;
 
 volatile U8 chart[N_2];
 
+volatile U32 timer;
 //-----------------------------------------------------------------------------
 // Main Routine
 //-----------------------------------------------------------------------------
 
 void main (void){    
    static unsigned char i,j;
-  
+ 
+   timer = 0;
    //s_ptr = 0; 
    SHDN = 1;  
    LED  = 1;
    
-   // Driver state machine
-   disp_on = 0;
+   // Driver state machine 
    colu = 0;
    coll = 16;
    state = 0;
@@ -86,22 +86,12 @@ void main (void){
  
    i = 0;
 
-   for(i=0;i<50;i++){
-      for(j=0;j<255;j++){
-         uartTx(i);
-      }
-   }
+   while(timer < 10000);
    SHDN = 0;
    LED = 0;
- 
-   for(i=0;i<50;i++){
-      for(j=0;j<255;j++){
-         uartTx(i);
-      }
-   } 
-
+   while(timer < 20000);
    LED = 1;
-   disp_on = 1;
+   
 
    while(1){ 
       // RX a byte then go in to compare mode
@@ -143,7 +133,7 @@ void main (void){
 //-----------------------------------------------------------------------------
 
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){           
-   
+   timer++; 
    TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
@@ -152,8 +142,10 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
 
    EIE1 &= ~EIE1_ET3__ENABLED;
    
-   if(disp_on){
+   if(timer > 20000){
 
+                        image = 0;
+      if(timer > 40000) image = 1;
 
       // Select image
       if(6 == state){
