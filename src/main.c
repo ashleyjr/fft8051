@@ -119,12 +119,9 @@ void main (void){
    while(1){ 
       // RX a byte then go in to compare mode
       // which tests the FFT algo
-      if(!SCON0_RI){
+      if(SCON0_RI){
          while(1){
-            SCON0_RI = 0;
-            s[0].re = SBUF0 - 128;
-            s[0].im = 0;
-            for(i=1;i<N;i++){
+            for(i=0;i<N;i++){
                while(!SCON0_RI);
                SCON0_RI = 0;
                s[i].re = SBUF0 - 128;
@@ -142,15 +139,16 @@ void main (void){
             image = 1;
             while(!SCON0_RI);
          } 
-      } 
-
-
-      //#endif
-
- 
-      //while(s_ptr != N); 
-      //fft(s); 
-      //s_ptr = 0;  
+      // Run the FFT on ADC readings
+      }else{  
+         while(s_ptr != N); 
+         fft(s); 
+         // Scale to fit on display
+         for(i=0;i<N_2;i++){
+            chart[i] = mag(&s[N_2-1-i]) >> 2;
+         }
+         //s_ptr = 0;  
+      }
    }
 }
  
