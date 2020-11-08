@@ -73,7 +73,7 @@ void main (void){
    static unsigned char i,j;
  
    timer = 0;
-   //s_ptr = 0; 
+   s_ptr = 0; 
    SHDN = 1;  
    LED  = 1;
    
@@ -118,11 +118,12 @@ void main (void){
       }else{  
          while(s_ptr != N); 
          fft(s); 
-         // Scale to fit on display
+         // Scale to fit on display 
          for(i=0;i<N_2;i++){
+            uartTx(mag(&s[N_2-1-i]));
             chart[i] = mag(&s[N_2-1-i]) >> 2;
          }
-         //s_ptr = 0;  
+         s_ptr = 0;  
       }
    }
 }
@@ -133,7 +134,25 @@ void main (void){
 //-----------------------------------------------------------------------------
 
 INTERRUPT (TIMER2_ISR, TIMER2_IRQn){           
+   
+   LED = 0;
+  
+   // Global time keeper
    timer++; 
+   
+   // Take ADC sample
+   ADC0CN0 |= ADC0CN0_ADBUSY__SET;
+   while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
+     
+   // ADC Sample
+   if(s_ptr < N){ 
+      //Places bias at 1V
+      s[s_ptr].re = (ADC0 >> 1) - 155;
+      s[s_ptr].im = 0;
+      s_ptr++;
+   } 
+   
+   LED = 1;
    TMR2CN &= ~TMR2CN_TF2H__SET;
 }
 
@@ -159,7 +178,6 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
             default:  data = (U8)(disp_0[coll] >> 8);             break;
          }
       }
-
       switch(state){ 
          // Turn everything off
          case 0:  smbWrite(DISP_SRC_0,    0xFF);   break;
@@ -185,23 +203,10 @@ INTERRUPT (TIMER3_ISR, TIMER3_IRQn){
                   state = 5;
                   break;
       }
-      state++;
-      
+      state++;  
    }
-
-   // ADC Sample
-   if(s_ptr < N){ 
-      ADC0CN0 |= ADC0CN0_ADBUSY__SET;
-      while(ADC0CN0 & ADC0CN0_ADBUSY__SET);
-      
-      // Places bias at 1V
-      s[s_ptr].re = (ADC0 >> 1) - 155;
-      s_ptr++;
-   } 
-   
    TMR3CN &= ~TMR3CN_TF3H__SET;
    EIE1 |= EIE1_ET3__ENABLED;
-
 }
 
 INTERRUPT(SMBUS0_ISR, SMBUS0_IRQn){ 
